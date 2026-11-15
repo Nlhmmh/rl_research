@@ -1,0 +1,215 @@
+import { LEVEL, OBSERVATION_VERSION } from './level';
+import type { AgentSnapshot } from './types';
+import { loadManifest, saveManifest } from '../persistence/checkpoints';
+import type {
+  AgentStats,
+  Algorithm,
+  HistoryPoint,
+  TrainingSpeed,
+  WorkerEvent,
+} from '../rl/protocol';
+import { TrainingManager } from '../rl/trainingManager';
+
+export type AgentCount = 1 | 2 | 4 | 8;
+export interface TrainingSettings {
+  algorithm: Algorithm;
+  agentCount: AgentCount;
+  episodes: number;
+  speed: TrainingSpeed;
+  renderAgents?: boolean;
+}
+
+interface TrainGameCallbacks {
+  onSnapshots: (snapshots: AgentSnapshot[]) => void;
+  onStatsReset: () => void;
+  onHistoryReset: () => void;
+  onStats: (stats: AgentStats) => void;
+  onHistory: (point: HistoryPoint) => void;
+  onActive: (active: boolean) => void;
+  onMessage: (message: string) => void;
+  onAlgorithm: (algorithm: Algorithm) => void;
+  onAgentCount: (count: AgentCount) => void;
+  onSpeed: (speed: TrainingSpeed) => void;
+}
+
+export function createTrainGame(callbacks: TrainGameCallbacks) {
+  let loadedPolicies = false;
+  let disposed = false;
+  let saving = false;
+  const pendingSaves = new Map<
+    string,
+    {
+      resolve: () => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
+
+  function rejectPendingSaves(message: string) {
+    for (const pending of pendingSaves.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new Error(message));
+    }
+    pendingSaves.clear();
+  }
+  const setActive = callbacks.onActive;
+  const setMessage = callbacks.onMessage;
+  const setAlgorithm = callbacks.onAlgorithm;
+  const setAgentCount = callbacks.onAgentCount;
+  const setSpeed = callbacks.onSpeed;
+
+  function reportError(error: unknown) {
+    if (!disposed) setMessage(error instanceof Error ? error.message : String(error));
+  }
+
+  function handleEvent(event: WorkerEvent) {
+    if (disposed) return;
+    if (event.type === 'error') {
+      rejectPendingSaves(event.message);
+      setMessage(event.message);
+    }
+    if (event.type === 'complete') setMessage(`${event.id} completed training.`);
+    if (event.type === 'saved') {
+      const pending = pendingSaves.get(event.checkpointId);
+      if (pending) {
+        clearTimeout(pending.timer);
+        pendingSaves.delete(event.checkpointId);
+        pending.resolve();
+      }
+    }
+    if (event.type === 'loaded') setMessage(`Loaded ${event.id}. Start to continue training.`);
+  }
+
+  const manager = new TrainingManager({
+    onSnapshots: callbacks.onSnapshots,
+    onStats: callbacks.onStats,
+    onHistory: callbacks.onHistory,
+    onEvent: handleEvent,
+  });
+
+  function start(settings: TrainingSettings) {
+    rejectPendingSaves('Training restarted before saving finished.');
+    const { algorithm, agentCount, episodes, speed, renderAgents = true } = settings;
+    setActive(true);
+    setMessage(loadedPolicies ? 'Continuing from loaded policy weights.' : 'Training started.');
+    if (loadedPolicies) {
+      manager.ids().forEach((id) =>
+        manager.send(id, {
+          type: 'start',
+          id,
+          algorithm,
+          episodes: Math.max(1, episodes),
+          speed,
+          renderAgents,
+        }),
+      );
+      loadedPolicies = false;
+    } else {
+      callbacks.onStatsReset();
+      callbacks.onHistoryReset();
+      manager.start(agentCount, algorithm, Math.max(1, episodes), speed, renderAgents);
+    }
+  }
+  function pause() {
+    manager.broadcast({ type: 'pause' });
+    setMessage('Training paused.');
+  }
+  function resume() {
+    manager.broadcast({ type: 'resume' });
+    setMessage('Training resumed.');
+  }
+  function stop() {
+    rejectPendingSaves('Training stopped before saving finished.');
+    manager.stop();
+    setActive(false);
+    loadedPolicies = false;
+    setMessage('Stopped; unsaved in-memory progress was discarded.');
+  }
+  function updateSpeed(value: TrainingSpeed) {
+    setSpeed(value);
+    manager.broadcast({ type: 'set-speed', speed: value });
+  }
+
+  function setRendering(enabled: boolean) {
+    manager.broadcast({ type: 'set-rendering', enabled });
+    if (!enabled) callbacks.onSnapshots([]);
+  }
+
+  async function save(algorithm: Algorithm) {
+    if (saving || disposed) return;
+    const ids = manager.ids();
+    if (!ids.length) {
+      setMessage('Start or load agents before saving.');
+      return;
+    }
+    manager.broadcast({ type: 'pause' });
+    saving = true;
+    setMessage('Saving policy checkpoints…');
+    const runId = `run-${crypto.randomUUID()}`;
+    try {
+      await Promise.all(
+        ids.map(
+          (id) =>
+            new Promise<void>((resolve, reject) => {
+              const checkpointId = `${runId}/${id}`;
+              const timer = setTimeout(() => {
+                pendingSaves.delete(checkpointId);
+                reject(new Error(`Saving ${id} timed out. The previous saved run is unchanged.`));
+              }, 30_000);
+              pendingSaves.set(checkpointId, { resolve, reject, timer });
+              manager.send(id, { type: 'save', checkpointId });
+            }),
+        ),
+      );
+      if (disposed) return;
+      await saveManifest({
+        schemaVersion: 1,
+        runId,
+        algorithm,
+        levelId: LEVEL.id,
+        agentIds: ids,
+        observationVersion: OBSERVATION_VERSION,
+        rewardVersion: 'v2',
+        saveType: 'policy-checkpoint',
+        savedAt: new Date().toISOString(),
+      });
+      setMessage('All agent policies saved. Training is paused.');
+    } catch (error) {
+      rejectPendingSaves('Save cancelled after a checkpoint failed.');
+      reportError(error);
+    } finally {
+      saving = false;
+    }
+  }
+
+  async function load() {
+    rejectPendingSaves('Loading another run cancelled the save.');
+    try {
+      const manifest = await loadManifest();
+      if (disposed) return;
+      setAlgorithm(manifest.algorithm);
+      setAgentCount(manifest.agentIds.length as 1 | 2 | 4 | 8);
+      manager.prepare(manifest.agentIds);
+      manifest.agentIds.forEach((id) =>
+        manager.send(id, {
+          type: 'load',
+          checkpointId: `${manifest.runId}/${id}`,
+          algorithm: manifest.algorithm,
+        }),
+      );
+      setActive(false);
+      loadedPolicies = true;
+      setMessage('Loading latest policy checkpoint…');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  function dispose() {
+    disposed = true;
+    rejectPendingSaves('Training screen closed before saving finished.');
+    manager.dispose();
+  }
+
+  return { start, pause, resume, stop, updateSpeed, setRendering, save, load, dispose };
+}

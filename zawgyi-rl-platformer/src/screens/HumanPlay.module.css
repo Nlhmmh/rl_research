@@ -1,0 +1,98 @@
+.screen {
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  width: min(1920px, 100%);
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+.header {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+.header > :first-child {
+  justify-self: start;
+  align-self: flex-start;
+}
+.header > :last-child {
+  justify-self: end;
+}
+.eyebrow {
+  color: #8b2132;
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  font-weight: 800;
+  text-align: center;
+  margin: 0;
+}
+.hint {
+  color: #264b37;
+  font-size: 0.75rem;
+  text-align: center;
+  margin: 0;
+}
+.outcome {
+  color: #fff;
+  background: red;
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+}
+.title {
+  text-align: center;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.panel {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  border: 1px solid #c7d1bf;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 15px 40px rgba(43, 68, 48, 0.07);
+}
+.panel :global(.game-canvas) {
+  height: 100%;
+}
+.controls {
+  z-index: 1;
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin: 0.8rem 0;
+}
+.controls span {
+  color: #fff;
+  background: #264b37;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+}
+
+@media (max-width: 650px) {
+  .screen {
+    padding: 0.75rem;
+  }
+  .header {
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  .header div {
+    grid-column: 1/-1;
+    grid-row: 1;
+  }
+  .header button {
+    grid-row: 2;
+  }
+}
