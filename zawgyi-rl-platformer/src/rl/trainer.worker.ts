@@ -37,19 +37,34 @@ async function train(id: string, selectedAlgorithm: Algorithm, episodes: number)
   paused = false;
   workerId = id;
   algorithm = selectedAlgorithm;
-  const env = new HimavantaEnvironment();
-  if (algorithm === 'q-learning') q ??= new QLearningAgent();
-  else if (!dqn) {
-    await tf.setBackend('cpu');
-    await tf.ready();
-    dqn = new DQNAgent();
-  }
-  let totalSteps = latestStats?.totalSteps ?? 0;
-  let successes = latestStats?.successes ?? 0;
-  let failures = latestStats?.failures ?? 0;
-  const recent: Array<{ reward: number; success: boolean }> = [];
-  let lastSnapshotAt = 0;
+  latestStats = {
+    id,
+    algorithm,
+    episode: episodeNumber,
+    targetEpisodes: episodes,
+    totalSteps: latestStats?.totalSteps ?? 0,
+    episodeReward: 0,
+    averageReward100: latestStats?.averageReward100 ?? 0,
+    successRate100: latestStats?.successRate100 ?? 0,
+    successes: latestStats?.successes ?? 0,
+    failures: latestStats?.failures ?? 0,
+    epsilon: q?.epsilon ?? dqn?.epsilon ?? 1,
+    status: 'running',
+  };
+  publishStatus('running');
   try {
+    const env = new HimavantaEnvironment();
+    if (algorithm === 'q-learning') q ??= new QLearningAgent();
+    else if (!dqn) {
+      await tf.setBackend('cpu');
+      await tf.ready();
+      dqn = new DQNAgent();
+    }
+    let totalSteps = latestStats?.totalSteps ?? 0;
+    let successes = latestStats?.successes ?? 0;
+    let failures = latestStats?.failures ?? 0;
+    const recent: Array<{ reward: number; success: boolean }> = [];
+    let lastSnapshotAt = 0;
     for (
       episodeNumber = (episodeNumber || 0) + 1;
       episodeNumber <= episodes && running;
@@ -86,8 +101,17 @@ async function train(id: string, selectedAlgorithm: Algorithm, episodes: number)
         episodeReward += result.reward;
         state = result.state;
         const now = performance.now();
+        if (now - lastSnapshotAt >= 80 || state.done) {
+          latestStats = {
+            ...latestStats!,
+            episode: episodeNumber,
+            totalSteps,
+            episodeReward,
+            status: paused ? 'paused' : 'running',
+          };
+          send({ type: 'stats', stats: latestStats });
+        }
         if (renderAgents && (now - lastSnapshotAt >= 80 || state.done)) {
-          lastSnapshotAt = now;
           send({
             type: 'snapshot',
             agent: {
@@ -101,6 +125,7 @@ async function train(id: string, selectedAlgorithm: Algorithm, episodes: number)
             },
           });
         }
+        if (now - lastSnapshotAt >= 80 || state.done) lastSnapshotAt = now;
         if (speed === 'max') {
           if (totalSteps % 32 === 0) await delay(0);
         } else await delay(16 / speed);

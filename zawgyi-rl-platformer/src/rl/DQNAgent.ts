@@ -35,7 +35,8 @@ export class DQNAgent {
   }
 
   private copyOnlineToTarget(): void {
-    const weights = this.online.getWeights();
+    // getWeights() exposes model-owned tensors. Dispose only our clones.
+    const weights = this.online.getWeights().map((weight) => weight.clone());
     try {
       this.target.setWeights(weights);
     } finally {

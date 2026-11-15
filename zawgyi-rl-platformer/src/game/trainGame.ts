@@ -36,6 +36,8 @@ export function createTrainGame(callbacks: TrainGameCallbacks) {
   let loadedPolicies = false;
   let disposed = false;
   let saving = false;
+  let runAlgorithm: Algorithm | null = null;
+  const completedAgents = new Set<string>();
   const pendingSaves = new Map<
     string,
     {
@@ -68,7 +70,15 @@ export function createTrainGame(callbacks: TrainGameCallbacks) {
       rejectPendingSaves(event.message);
       setMessage(event.message);
     }
-    if (event.type === 'complete') setMessage(`${event.id} completed training.`);
+    if (event.type === 'complete') {
+      if (completedAgents.has(event.id)) return;
+      completedAgents.add(event.id);
+      setMessage(`${event.id} completed training.`);
+      const ids = manager.ids();
+      if (runAlgorithm && ids.length && ids.every((id) => completedAgents.has(id))) {
+        void save(runAlgorithm, true);
+      }
+    }
     if (event.type === 'saved') {
       const pending = pendingSaves.get(event.checkpointId);
       if (pending) {
@@ -90,6 +100,8 @@ export function createTrainGame(callbacks: TrainGameCallbacks) {
   function start(settings: TrainingSettings) {
     rejectPendingSaves('Training restarted before saving finished.');
     const { algorithm, agentCount, episodes, speed, renderAgents = true } = settings;
+    runAlgorithm = algorithm;
+    completedAgents.clear();
     setActive(true);
     setMessage(loadedPolicies ? 'Continuing from loaded policy weights.' : 'Training started.');
     if (loadedPolicies) {
@@ -119,6 +131,8 @@ export function createTrainGame(callbacks: TrainGameCallbacks) {
     setMessage('Training resumed.');
   }
   function stop() {
+    runAlgorithm = null;
+    completedAgents.clear();
     rejectPendingSaves('Training stopped before saving finished.');
     manager.stop();
     setActive(false);
@@ -135,8 +149,23 @@ export function createTrainGame(callbacks: TrainGameCallbacks) {
     if (!enabled) callbacks.onSnapshots([]);
   }
 
-  async function save(algorithm: Algorithm) {
-    if (saving || disposed) return;
+  async function save(algorithm: Algorithm, automatic = false) {
+    if (disposed) return;
+    // A manual save already in progress predates completion; queue a new final
+    // checkpoint after its acknowledgements rather than skipping the autosave.
+    if (saving) {
+      if (automatic) {
+        await new Promise<void>((resolve) => {
+          const check = () => {
+            if (!saving || disposed) resolve();
+            else setTimeout(check, 50);
+          };
+          check();
+        });
+        if (!disposed && runAlgorithm === algorithm) await save(algorithm, true);
+      }
+      return;
+    }
     const ids = manager.ids();
     if (!ids.length) {
       setMessage('Start or load agents before saving.');
@@ -144,7 +173,7 @@ export function createTrainGame(callbacks: TrainGameCallbacks) {
     }
     manager.broadcast({ type: 'pause' });
     saving = true;
-    setMessage('Saving policy checkpoints…');
+    setMessage(automatic ? 'Training complete. Saving policies automatically…' : 'Saving policy checkpoints…');
     const runId = `run-${crypto.randomUUID()}`;
     try {
       await Promise.all(
@@ -173,16 +202,19 @@ export function createTrainGame(callbacks: TrainGameCallbacks) {
         saveType: 'policy-checkpoint',
         savedAt: new Date().toISOString(),
       });
-      setMessage('All agent policies saved. Training is paused.');
+      setMessage(automatic ? 'Training complete. All agent policies saved automatically.' : 'All agent policies saved. Training is paused.');
     } catch (error) {
       rejectPendingSaves('Save cancelled after a checkpoint failed.');
       reportError(error);
     } finally {
       saving = false;
+      if (automatic && !disposed) setActive(false);
     }
   }
 
   async function load() {
+    runAlgorithm = null;
+    completedAgents.clear();
     rejectPendingSaves('Loading another run cancelled the save.');
     try {
       const manifest = await loadManifest();

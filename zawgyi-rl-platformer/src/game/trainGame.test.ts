@@ -18,6 +18,7 @@ vi.mock('../rl/trainingManager', () => ({
     broadcast = vi.fn();
     send = mocks.send;
     dispose = vi.fn();
+    start = vi.fn();
   },
 }));
 import { createTrainGame } from './trainGame';
@@ -57,6 +58,27 @@ describe('training policy saving', () => {
     await saving;
     expect(mocks.saveManifest).not.toHaveBeenCalled();
     expect(onMessage).toHaveBeenLastCalledWith('Storage quota exceeded');
+    game.dispose();
+  });
+
+  it('automatically saves once all agents complete and confirms persistence', async () => {
+    const { game, onMessage } = setup();
+    game.start({ algorithm: 'q-learning', agentCount: 2, episodes: 10, speed: 'max' });
+    mocks.callbacks!.onEvent!({ type: 'complete', id: 'AI-1' });
+    expect(mocks.send).not.toHaveBeenCalled();
+    mocks.callbacks!.onEvent!({ type: 'complete', id: 'AI-2' });
+    expect(mocks.send).toHaveBeenCalledTimes(2);
+    expect(mocks.saveManifest).not.toHaveBeenCalled();
+    for (const [id, command] of mocks.send.mock.calls) {
+      if (command.type === 'save') mocks.callbacks!.onEvent!({
+        type: 'saved', id, checkpointId: command.checkpointId,
+      });
+    }
+    await vi.waitFor(() => expect(onMessage).toHaveBeenLastCalledWith(
+      'Training complete. All agent policies saved automatically.',
+    ));
+    mocks.callbacks!.onEvent!({ type: 'complete', id: 'AI-2' });
+    expect(mocks.send).toHaveBeenCalledTimes(2);
     game.dispose();
   });
 });
