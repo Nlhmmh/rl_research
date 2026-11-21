@@ -66,6 +66,17 @@ export function createTrainGame(callbacks: TrainGameCallbacks) {
 
   function handleEvent(event: WorkerEvent) {
     if (disposed) return;
+    if (event.type === 'evaluation') {
+      const outcome = event.result.success
+        ? `goal reached in ${event.result.steps} steps`
+        : 'goal not reached';
+      const best = event.best.success
+        ? `${event.best.steps} steps at episode ${event.best.episode}`
+        : 'no successful policy yet';
+      setMessage(
+        `${event.id}: evaluation at episode ${event.result.episode}: ${outcome}. Best: ${best}. No improvement: ${event.staleEvaluations}/5.`,
+      );
+    }
     if (event.type === 'error') {
       rejectPendingSaves(event.message);
       setMessage(event.message);
@@ -73,7 +84,11 @@ export function createTrainGame(callbacks: TrainGameCallbacks) {
     if (event.type === 'complete') {
       if (completedAgents.has(event.id)) return;
       completedAgents.add(event.id);
-      setMessage(`${event.id} completed training.`);
+      setMessage(
+        event.reason === 'no-improvement'
+          ? `${event.id} stopped after five evaluations without improvement. Best and final policies saved.`
+          : `${event.id} completed training. Best and final policies saved.`,
+      );
       const ids = manager.ids();
       if (runAlgorithm && ids.length && ids.every((id) => completedAgents.has(id))) {
         void save(runAlgorithm, true);
@@ -173,7 +188,11 @@ export function createTrainGame(callbacks: TrainGameCallbacks) {
     }
     manager.broadcast({ type: 'pause' });
     saving = true;
-    setMessage(automatic ? 'Training complete. Saving policies automatically…' : 'Saving policy checkpoints…');
+    setMessage(
+      automatic
+        ? 'Training complete. Saving policies automatically…'
+        : 'Saving policy checkpoints…',
+    );
     const runId = `run-${crypto.randomUUID()}`;
     try {
       await Promise.all(
@@ -202,7 +221,11 @@ export function createTrainGame(callbacks: TrainGameCallbacks) {
         saveType: 'policy-checkpoint',
         savedAt: new Date().toISOString(),
       });
-      setMessage(automatic ? 'Training complete. All agent policies saved automatically.' : 'All agent policies saved. Training is paused.');
+      setMessage(
+        automatic
+          ? 'Training complete. All agent policies saved automatically.'
+          : 'All agent policies saved. Training is paused.',
+      );
     } catch (error) {
       rejectPendingSaves('Save cancelled after a checkpoint failed.');
       reportError(error);

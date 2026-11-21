@@ -1,4 +1,5 @@
 import type { AgentSnapshot } from '../game/types';
+import type { EvaluationResult } from './evaluation';
 
 export type Algorithm = 'q-learning' | 'dqn';
 export type TrainingSpeed = 1 | 2 | 4 | 'max';
@@ -30,7 +31,14 @@ export interface HistoryPoint {
 }
 
 export type WorkerCommand =
-  | { type: 'start'; id: string; algorithm: Algorithm; episodes: number; speed: TrainingSpeed; renderAgents?: boolean }
+  | {
+      type: 'start';
+      id: string;
+      algorithm: Algorithm;
+      episodes: number;
+      speed: TrainingSpeed;
+      renderAgents?: boolean;
+    }
   | { type: 'pause' }
   | { type: 'resume' }
   | { type: 'stop' }
@@ -40,10 +48,18 @@ export type WorkerCommand =
   | { type: 'load'; checkpointId: string; algorithm: Algorithm };
 
 export type WorkerEvent =
+  | {
+      type: 'evaluation';
+      id: string;
+      result: EvaluationResult;
+      best: EvaluationResult;
+      staleEvaluations: number;
+    }
+  | { type: 'policy-saved'; id: string; checkpointId: string; kind: 'best' | 'final' }
   | { type: 'snapshot'; agent: AgentSnapshot }
   | { type: 'stats'; stats: AgentStats }
   | { type: 'history'; point: HistoryPoint }
   | { type: 'saved'; id: string; checkpointId: string }
   | { type: 'loaded'; id: string; checkpointId: string; algorithm: Algorithm }
-  | { type: 'complete'; id: string }
+  | { type: 'complete'; id: string; reason?: 'episode-limit' | 'no-improvement' }
   | { type: 'error'; id: string; message: string };

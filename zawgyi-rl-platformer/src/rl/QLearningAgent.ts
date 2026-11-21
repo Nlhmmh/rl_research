@@ -22,10 +22,12 @@ export class QLearningAgent {
     if (explore && Math.random() < this.epsilon) {
       return ACTIONS[Math.floor(Math.random() * ACTIONS.length)];
     }
-    const values = this.row(stateKey);
+    const values = explore
+      ? this.row(stateKey)
+      : (this.table.get(stateKey) ?? ACTIONS.map(() => 0));
     const highest = Math.max(...values);
     const ties = ACTIONS.filter((action) => values[action] === highest);
-    return ties[Math.floor(Math.random() * ties.length)];
+    return explore ? ties[Math.floor(Math.random() * ties.length)] : ties[0];
   }
 
   learn(s: string, action: Action, reward: number, nextState: string, done: boolean): void {

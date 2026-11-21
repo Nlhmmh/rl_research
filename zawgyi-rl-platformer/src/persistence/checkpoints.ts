@@ -3,6 +3,13 @@ import { entries, get, set } from 'idb-keyval';
 import { LEVEL, OBSERVATION_VERSION } from '../game/level';
 import { QLearningAgent } from '../rl/QLearningAgent';
 import type { Algorithm } from '../rl/protocol';
+import type { EvaluationResult } from '../rl/evaluation';
+
+export interface CheckpointDetails {
+  kind?: 'best' | 'final';
+  evaluation?: EvaluationResult;
+  stopReason?: 'episode-limit' | 'no-improvement';
+}
 
 export interface CheckpointMetadata {
   schemaVersion: 1;
@@ -14,6 +21,7 @@ export interface CheckpointMetadata {
   rewardVersion: 'v2';
   episode: number;
   epsilon: number;
+  details?: CheckpointDetails;
 }
 
 export interface RunManifest {
@@ -37,15 +45,25 @@ export interface SavedPolicy {
 
 export async function listPolicies(): Promise<SavedPolicy[]> {
   const records = await entries<string, { metadata?: CheckpointMetadata }>();
-  return records.flatMap(([storageKey, record]) => {
-    const metadata = record?.metadata;
-    if (!storageKey.startsWith('zawgyi/checkpoint/') || !metadata ||
+  return records
+    .flatMap(([storageKey, record]) => {
+      const metadata = record?.metadata;
+      if (
+        !storageKey.startsWith('zawgyi/checkpoint/') ||
+        !metadata ||
         storageKey !== key(metadata.id) ||
-        !['q-learning', 'dqn'].includes(metadata.algorithm)) return [];
-    let compatible = true;
-    try { validate(metadata); } catch { compatible = false; }
-    return [{ metadata, compatible }];
-  }).sort((a, b) => b.metadata.savedAt.localeCompare(a.metadata.savedAt));
+        !['q-learning', 'dqn'].includes(metadata.algorithm)
+      )
+        return [];
+      let compatible = true;
+      try {
+        validate(metadata);
+      } catch {
+        compatible = false;
+      }
+      return [{ metadata, compatible }];
+    })
+    .sort((a, b) => b.metadata.savedAt.localeCompare(a.metadata.savedAt));
 }
 
 function validate(metadata: CheckpointMetadata, algorithm?: Algorithm): void {
@@ -64,6 +82,7 @@ export async function saveQAgent(
   id: string,
   agent: QLearningAgent,
   episode: number,
+  details?: CheckpointDetails,
 ): Promise<void> {
   const metadata: CheckpointMetadata = {
     schemaVersion: 1,
@@ -75,6 +94,7 @@ export async function saveQAgent(
     rewardVersion: 'v2',
     episode,
     epsilon: agent.epsilon,
+    details,
   };
   await set(key(id), { metadata, policy: agent.serialize() });
 }
@@ -117,7 +137,12 @@ export function dqnHandler(id: string): tf.io.IOHandler {
   };
 }
 
-export async function saveDqnMetadata(id: string, episode: number, epsilon: number): Promise<void> {
+export async function saveDqnMetadata(
+  id: string,
+  episode: number,
+  epsilon: number,
+  details?: CheckpointDetails,
+): Promise<void> {
   const metadata: CheckpointMetadata = {
     schemaVersion: 1,
     id,
@@ -128,6 +153,7 @@ export async function saveDqnMetadata(id: string, episode: number, epsilon: numb
     rewardVersion: 'v2',
     episode,
     epsilon,
+    details,
   };
   await set(key(id), { metadata });
 }

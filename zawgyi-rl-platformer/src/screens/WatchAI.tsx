@@ -97,6 +97,10 @@ export function WatchAI({ onBack }: { onBack: () => void }) {
               {policies.map(({ metadata, compatible }) => (
                 <option key={metadata.id} value={metadata.id} disabled={!compatible}>
                   {metadata.algorithm} · {metadata.id} · {t('training.episode')} {metadata.episode}
+                  {metadata.details?.kind ? ` · ${metadata.details.kind.toUpperCase()}` : ''}
+                  {metadata.details?.evaluation
+                    ? ` · ${metadata.details.evaluation.success ? 'Goal reached' : 'Goal not reached'} · ${metadata.details.evaluation.steps} steps`
+                    : ''}
                   {' · '}
                   {new Date(metadata.savedAt).toLocaleString()}
                   {!compatible ? ` · ${t('watch.incompatiblePolicy')}` : ''}

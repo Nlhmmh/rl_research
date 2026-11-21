@@ -3,6 +3,9 @@ import * as tf from '@tensorflow/tfjs';
 import { HimavantaEnvironment } from '../game/environment';
 import { observe } from '../game/observation';
 import { qStateKey } from '../game/observation-q';
+import { EVALUATION } from '../game/level';
+import { evaluatePolicy, isBetterEvaluation, type EvaluationResult } from './evaluation';
+import type { CheckpointDetails } from '../persistence/checkpoints';
 import {
   dqnHandler,
   loadMetadata,
@@ -53,6 +56,40 @@ async function train(id: string, selectedAlgorithm: Algorithm, episodes: number)
   };
   publishStatus('running');
   try {
+    const checkpointRoot = `run-${crypto.randomUUID()}/${id}`;
+    let best: EvaluationResult | null = null;
+    let lastEvaluation: EvaluationResult | null = null;
+    let staleEvaluations = 0;
+    let completedEpisode = episodeNumber;
+    let stopReason: 'episode-limit' | 'no-improvement' = 'episode-limit';
+
+    async function evaluateCompletedPolicy() {
+      let evaluationSteps = 0;
+      const result = await evaluatePolicy(
+        completedEpisode,
+        (state) =>
+          algorithm === 'q-learning'
+            ? q!.act(qStateKey(state), false)
+            : dqn!.act(observe(state), false),
+        async () => {
+          if (++evaluationSteps % 32 === 0) await delay(0);
+          while (paused && running) await delay(30);
+          return running;
+        },
+      );
+      if (!result || !running) return;
+      lastEvaluation = result;
+      if (isBetterEvaluation(result, best)) {
+        await writePolicy(`${checkpointRoot}/best`, completedEpisode, {
+          kind: 'best',
+          evaluation: result,
+        });
+        best = result;
+        staleEvaluations = 0;
+        send({ type: 'policy-saved', id, checkpointId: `${checkpointRoot}/best`, kind: 'best' });
+      } else staleEvaluations++;
+      send({ type: 'evaluation', id, result, best: best!, staleEvaluations });
+    }
     const env = new HimavantaEnvironment();
     if (algorithm === 'q-learning') q ??= new QLearningAgent();
     else if (!dqn) {
@@ -166,10 +203,29 @@ async function train(id: string, selectedAlgorithm: Algorithm, episodes: number)
           success: state.success,
         },
       });
+      completedEpisode = episodeNumber;
+      if (completedEpisode % EVALUATION.everyEpisodes === 0) {
+        await evaluateCompletedPolicy();
+        if (staleEvaluations >= EVALUATION.patience) {
+          stopReason = 'no-improvement';
+          break;
+        }
+      }
     }
     if (running) {
+      // Short runs and a final partial evaluation interval still get both policies.
+      if ((lastEvaluation as EvaluationResult | null)?.episode !== completedEpisode)
+        await evaluateCompletedPolicy();
+      if (!running) return;
+      episodeNumber = completedEpisode;
+      await writePolicy(`${checkpointRoot}/final`, completedEpisode, {
+        kind: 'final',
+        evaluation: lastEvaluation ?? undefined,
+        stopReason,
+      });
+      send({ type: 'policy-saved', id, checkpointId: `${checkpointRoot}/final`, kind: 'final' });
       publishStatus('complete');
-      send({ type: 'complete', id });
+      send({ type: 'complete', id, reason: stopReason });
     } else publishStatus('stopped');
   } catch (error) {
     publishStatus('error');
@@ -179,20 +235,28 @@ async function train(id: string, selectedAlgorithm: Algorithm, episodes: number)
   }
 }
 
-async function saveCheckpoint(checkpointId: string): Promise<void> {
-  paused = true;
+async function writePolicy(
+  checkpointId: string,
+  episode: number,
+  details?: CheckpointDetails,
+): Promise<void> {
   await pendingUpdate;
-  if (algorithm === 'q-learning' && q) await saveQAgent(checkpointId, q, episodeNumber);
+  if (algorithm === 'q-learning' && q) await saveQAgent(checkpointId, q, episode, details);
   else if (dqn) {
     await dqn.online.save(dqnHandler(checkpointId));
-    await saveDqnMetadata(checkpointId, episodeNumber, dqn.epsilon);
+    await saveDqnMetadata(checkpointId, episode, dqn.epsilon, details);
   } else throw new Error('No policy is available to save');
+}
+
+async function saveCheckpoint(checkpointId: string): Promise<void> {
+  paused = true;
+  await writePolicy(checkpointId, episodeNumber);
   send({ type: 'saved', id: workerId, checkpointId });
 }
 
 async function loadCheckpoint(checkpointId: string, selectedAlgorithm: Algorithm): Promise<void> {
   if (running) throw new Error('Pause or stop before loading a checkpoint');
-  workerId ||= checkpointId.split('/').at(-1) ?? 'AI-1';
+  workerId ||= checkpointId.split('/').find((part) => /^AI-\d+$/.test(part)) ?? 'AI-1';
   algorithm = selectedAlgorithm;
   if (algorithm === 'q-learning') {
     const loaded = await loadQAgent(checkpointId);

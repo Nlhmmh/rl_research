@@ -21,6 +21,7 @@ export const LEVEL = {
 } as const;
 
 export const FIXED_DT = 1 / 60; // 60 FPS
+export const EVALUATION = { everyEpisodes: 100, patience: 5 } as const;
 export const RUN_SPEED = 180;
 export const GRAVITY = 900;
 export const JUMP_SPEED = 390;
