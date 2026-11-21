@@ -28,7 +28,7 @@ Open the address printed by Vite.
 - Pausing freezes simulation and character pose animation. Success/failure is
   displayed on the screen.
 
-Keyboard mappings are defined in `src/game/input.ts`.
+Keyboard mappings are defined in `src/features/human-play/keyboard-controller.ts`.
 
 ### Watch AI
 
@@ -65,7 +65,7 @@ Watch AI additionally supports selecting individual policies from older runs.
 
 ## Learning configuration
 
-`src/game/level.ts` centralizes geometry, physics constants, rewards, observations,
+`src/modules/game/domain/level.ts` centralizes geometry, physics constants, rewards, observation settings,
 Q-learning defaults, sprite dimensions, and game timing.
 
 Q-learning uses a tabular Bellman update with alpha 0.1, gamma 0.95, epsilon
@@ -89,25 +89,23 @@ will succeed.
 ## Architecture
 
 ```text
+public/assets/                       Game art and branding
 src/
-  screens/             React state, UI, and screen CSS Modules
-  components/          Language switcher, statistics table, learning charts
-  game/
-    level.ts           Shared game configuration
-    physics.ts         Canonical fixed-step movement and collisions
-    environment.ts     Reset, transition, rewards, episode termination
-    input.ts           Keyboard mappings
-    observation*.ts    DQN observations and tabular state encoding
-    snapshot.ts        Human and Watch rendering snapshots
-    humanGame.ts       Human input, loop, pause/restart, lifecycle
-    watchGame.ts       Policy playback/loading and lifecycle
-    trainGame.ts       Training controls, save acknowledgements, orchestration
-    GameCanvas.tsx     Phaser lifecycle and container resizing
-    LiveScene.ts       Background, platforms, characters, stone, camera
-  rl/                  Learners, replay buffer, worker protocol and manager
-  persistence/         IndexedDB policies, metadata, and latest-run manifest
-  localization/        English/Burmese resources
-  assets/              Character, environment, stone, and emblem images
+  main.tsx                           React entry point
+  app/                               App shell, navigation, global styles
+  features/                          Main Menu, Human Play, Watch AI, Train AI
+  modules/
+    game/
+      domain/                        Level, physics, rewards, episode termination
+      application/                   Rendering snapshots
+      infrastructure/phaser/         World scene, sprites, camera
+      presentation/                  React canvas and resize handling
+    reinforcement-learning/
+      domain/policies/               Observation encoding
+      application/                   Policy evaluation
+      infrastructure/                Q-learning, DQN, workers, IndexedDB
+    training/application/            Run controls and coordinated checkpoint saves
+  shared/i18n/                       Translations and language switcher
 ```
 
 All modes use the same deterministic TypeScript simulator at 1/60-second steps.
@@ -122,10 +120,17 @@ Policies live in **browser IndexedDB**, using `idb-keyval`'s default
 | Key | Contents |
 | --- | --- |
 | `zawgyi/checkpoint/<runId>/<agentId>` | Metadata and Q-table, or DQN metadata |
-| `zawgyi/checkpoint/<runId>/<agentId>/model` | DQN model topology and weights |
+| `zawgyi/checkpoint/<runId>/<agentId>/{best,final}` | Per-agent evaluation checkpoints |
+| `<checkpoint key>/model` | DQN model topology and weights |
 | `zawgyi/latest-manifest` | Most recently acknowledged saved agent group |
 
-Save waits for all agents to acknowledge storage before updating the latest
+Every 100 training episodes, each agent evaluates its policy with exploration
+and learning disabled. Reaching the goal ranks first, then fewer completion
+steps. An agent stops after five evaluations without improvement or at its
+episode limit and retains separate Best and Final checkpoints.
+
+Group saves, including the completion autosave, wait for all agents to
+acknowledge storage before updating the latest
 manifest. Failures leave the previous manifest available. DQN serialization waits
 for an active training batch to finish.
 
@@ -143,13 +148,13 @@ Inspect storage in Chrome under **DevTools → Application → IndexedDB**.
 
 ## Assets and localization
 
-The renderer uses:
+Game art and branding live under `public/assets/`.
 
-- `zawgyi.png`: eight character poses.
-- `Himavanta_Forest_Beneath_Snowy_Peaks.png`: scene background.
-- `Himavanta_Forest_Grass_Platform.png`: ground segments with proportional scaling.
-- `philosophers_stone_spritesheet_256.png`: nine-frame animated destination.
-- `Burmese_Alchemist_Glowing_Stone_Emblem.png`: menu brand mark and favicon.
+- `characters/zawgyi/spritesheet.png` holds eight character poses.
+- `backgrounds/himavanta-forest.png` is the scene background.
+- `terrain/grass-platform.png` is scaled proportionally across ground segments.
+- `objects/philosopher-stone.png` is the nine-frame goal sprite sheet.
+- `branding/alchemist-emblem.png` supplies the menu emblem and favicon.
 
 English/Burmese selection persists in localStorage. Some statistics labels,
 diagnostic messages, and chart headings remain English-only. Myanmar font
@@ -175,8 +180,5 @@ reduces display overhead, but DQN optimization still consumes CPU and memory.
 
 ## Project documents
 
-- [Requirements](../docs/README-requirements.md)
-- [Step-by-step guide](../docs/Zawgyi_RL_Platformer_Step_by_Step_Guide.md)
-
-The guide contains earlier tutorial examples; use the current requirements and
-source for adopted behavior.
+- [Product requirements](README-requirements.md)
+- [How reinforcement learning works](README-rl.md)

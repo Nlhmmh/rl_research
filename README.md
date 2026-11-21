@@ -29,11 +29,8 @@ character, forest, platform, stone, and emblem PNG assets.
 ### Documentation
 
 - [Application setup, controls, architecture, and storage](zawgyi-rl-platformer/README.md)
-- [Product requirements](docs/README-requirements.md)
-- [Step-by-step development guide](docs/Zawgyi_RL_Platformer_Step_by_Step_Guide.md)
-
-The requirements reflect current product decisions; the guide remains a build
-reference and may contain earlier examples.
+- [Product requirements](zawgyi-rl-platformer/README-requirements.md)
+- [How reinforcement learning works](zawgyi-rl-platformer/README-rl.md)
 
 ### Development
 

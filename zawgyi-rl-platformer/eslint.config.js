@@ -19,4 +19,36 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    files: ['src/modules/*/domain/**/*.ts'],
+    ignores: ['**/*.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '**/app/**',
+                '**/features/**',
+                '**/application/**',
+                '**/presentation/**',
+                '**/infrastructure/**',
+                '**/controllers/**',
+                'react',
+                'react/**',
+                'react-dom',
+                'react-dom/**',
+                'phaser',
+                'phaser/**',
+                'idb-keyval',
+              ],
+              message:
+                'Keep simulation and learning independent of UI, controllers, and browser infrastructure.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 ]);
