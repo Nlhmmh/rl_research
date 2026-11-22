@@ -1,5 +1,5 @@
-import * as tf from '@tensorflow/tfjs';
-import { entries, get, set } from 'idb-keyval';
+import type * as tf from '@tensorflow/tfjs';
+import { get, listRecords, set } from './sqlite-client';
 import { LEVEL, OBSERVATION_VERSION } from '../../../game/domain/level';
 import { QLearningAgent } from '../algorithms/q-learning/QLearningAgent';
 import type { Algorithm } from '../workers/protocol';
@@ -44,24 +44,17 @@ export interface SavedPolicy {
 }
 
 export async function listPolicies(): Promise<SavedPolicy[]> {
-  const records = await entries<string, { metadata?: CheckpointMetadata }>();
+  const records = await listRecords<CheckpointMetadata>();
   return records
-    .flatMap(([storageKey, record]) => {
-      const metadata = record?.metadata;
-      if (
-        !storageKey.startsWith('zawgyi/checkpoint/') ||
-        !metadata ||
-        storageKey !== key(metadata.id) ||
-        !['q-learning', 'dqn'].includes(metadata.algorithm)
-      )
-        return [];
+    .filter((metadata) => ['q-learning', 'dqn'].includes(metadata.algorithm))
+    .map((metadata) => {
       let compatible = true;
       try {
         validate(metadata);
       } catch {
         compatible = false;
       }
-      return [{ metadata, compatible }];
+      return { metadata, compatible };
     })
     .sort((a, b) => b.metadata.savedAt.localeCompare(a.metadata.savedAt));
 }
