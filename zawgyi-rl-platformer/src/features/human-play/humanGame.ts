@@ -13,7 +13,7 @@ interface HumanGameCallbacks {
 }
 
 export function createHumanGame(callbacks: HumanGameCallbacks) {
-  const env = new HimavantaEnvironment();
+  const env = new HimavantaEnvironment({ maxSteps: null });
   const keys = new Set<string>();
   let paused = false;
   let raf = 0;

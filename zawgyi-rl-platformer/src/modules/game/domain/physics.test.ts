@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { HimavantaEnvironment } from './environment';
+import { LEVEL } from './level';
+import { ACTION } from './types';
 
 // These tests validate basic contracts, not whether RL has learned.
 describe('HimavantaEnvironment', () => {
@@ -19,6 +21,18 @@ describe('HimavantaEnvironment', () => {
     const env = new HimavantaEnvironment();
     let last = env.reset();
     while (!last.done) last = env.step(0).state;
+    expect(last.steps).toBe(LEVEL.maxSteps);
     expect(env.step(2).state).toEqual(last);
+  });
+
+  it('allows unlimited idle steps with no limit and still ends on a fall', () => {
+    const env = new HimavantaEnvironment({ maxSteps: null });
+    for (let step = 0; step <= LEVEL.maxSteps; step++) env.step(ACTION.IDLE);
+    expect(env.getState()).toMatchObject({ steps: LEVEL.maxSteps + 1, done: false });
+
+    for (let step = 0; step < LEVEL.maxSteps && !env.getState().done; step++) {
+      env.step(ACTION.RIGHT);
+    }
+    expect(env.getState()).toMatchObject({ done: true, success: false });
   });
 });

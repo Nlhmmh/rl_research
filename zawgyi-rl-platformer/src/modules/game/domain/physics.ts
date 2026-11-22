@@ -19,7 +19,11 @@ export function initialPlayerState(): PlayerState {
   };
 }
 
-export function physicsStep(state: PlayerState, action: Action): PlayerState {
+export function physicsStep(
+  state: PlayerState,
+  action: Action,
+  maxSteps: number | null = LEVEL.maxSteps,
+): PlayerState {
   if (state.done) return { ...state };
 
   const vx = horizontalDirection(action) * RUN_SPEED;
@@ -43,7 +47,7 @@ export function physicsStep(state: PlayerState, action: Action): PlayerState {
   const success = grounded && x >= LEVEL.goalX;
 
   // The player fails if they fall below the level or exceed the maximum number of steps.
-  const failed = y > LEVEL.height + FALL_MARGIN || steps >= LEVEL.maxSteps;
+  const failed = y > LEVEL.height + FALL_MARGIN || (maxSteps !== null && steps >= maxSteps);
 
   return {
     x,

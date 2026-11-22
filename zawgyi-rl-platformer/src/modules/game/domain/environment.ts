@@ -7,6 +7,12 @@ export class HimavantaEnvironment {
   private crossedGaps = new Set<number>();
   private furthestX: number = LEVEL.spawnX;
 
+  private readonly maxSteps: number | null;
+
+  constructor({ maxSteps = LEVEL.maxSteps }: { maxSteps?: number | null } = {}) {
+    this.maxSteps = maxSteps;
+  }
+
   reset(): PlayerState {
     this.state = initialPlayerState();
     this.crossedGaps.clear();
@@ -29,7 +35,7 @@ export class HimavantaEnvironment {
     }
 
     const before = this.state;
-    const after = physicsStep(before, action);
+    const after = physicsStep(before, action, this.maxSteps);
     let reward = REWARDS.step as number; // time cost; discourages endless waiting
 
     // Reward NET movement toward the goal; moving back cancels progress.
