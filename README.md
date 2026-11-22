@@ -17,11 +17,12 @@ npm run dev
 ### Modes
 
 - **Human Play:** keyboard movement, jumping, pause/resume, restart, and outcomes.
-- **Watch AI:** random baseline or a specific saved run/agent; 1×/2×/4× playback.
-  Success/failure stays visible until Restart.
-- **Train AI:** 1/2/4/8 independent agents, worker-based Q-learning or DQN,
-  live statistics, three charts, camera selection, and policy save/load.
-  Optional headless training disables the canvas and worker snapshots.
+- **Watch AI:** opens a successful Best policy when available. You can select
+  another saved policy or the random baseline. Success or failure stays visible
+  until Restart.
+- **Train AI:** train 1, 2, 4, or 8 independent Q-learning or DQN agents with an
+  adjustable step budget. Each agent evaluates every 100 episodes and at the
+  budget limit. Headless mode keeps statistics and charts visible.
 
 The interface supports English and Burmese Unicode. The game uses supplied
 character, forest, platform, stone, and emblem PNG assets.
@@ -44,7 +45,6 @@ npm run typecheck
 npm run build
 ```
 
-Policies are stored in browser IndexedDB for the current site and browser profile.
-They are policy checkpoints, not exact resumable training snapshots. Learning
-performance depends on training settings; a fixed-level benchmark does not
-establish generalization to unseen levels.
+Training saves Final and, once an agent reaches the goal in a greedy evaluation,
+Best. The app serves these policies from SQLite using a browser session cookie.
+See the [application README](zawgyi-rl-platformer/README.md#saved-policies) for storage details.

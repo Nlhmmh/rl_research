@@ -218,59 +218,53 @@ Headless mode skips rendering/snapshots; it preserves learning rules.
 
 ```mermaid
 flowchart TD
-    A["Complete a training episode"] --> B{"100th episode?"}
-    B -->|No| C["Continue training until episode limit"]
-    B -->|Yes| D["Fresh environment: greedy inference only"]
-    D --> E{"First evaluation, or better result?"}
-    E -->|Yes| F["Save BEST; reset stale count"]
-    E -->|No| G["Increment stale count"]
-    F --> H{"Five stale evaluations?"}
-    G --> H
-    H -->|No| C
-    H -->|Yes| I["Stop this agent"]
-    C --> J{"Episode limit reached?"}
-    J -->|No| A
-    J -->|Yes| I
-    I --> K["Evaluate final policy if needed; save FINAL"]
+    A["Train with exploration"] --> B{"Completed episode count is a multiple of 100, or step budget reached?"}
+    B -->|No| A
+    B -->|Yes| C["Run a fresh greedy episode"]
+    C --> D{"First success or faster success?"}
+    D -->|Yes| E["Save Best and reset patience"]
+    D -->|No| F["Count a non-improvement if Best exists"]
+    E --> G{"Step budget reached or five non-improvements?"}
+    F --> G
+    G -->|No| A
+    G -->|Yes| H["Save Final and report outcome"]
 ```
 
-Evaluation runs **one fresh fixed-level episode**, with no exploration, replay
-insertion, weight/table updates, or epsilon decay. It does not advance the training
-environment or training statistics.
+Each evaluation runs **one greedy episode** from the normal spawn with no
+exploration, weight or table updates, replay insertion, or epsilon decay. Its
+steps are separate from the **1,000,000 training steps per agent** allowed by
+default. The per-episode limit remains **1,200 steps**.
 
-Best-policy ranking:
+| Evaluation result | Effect |
+| --- | --- |
+| First success | Save Best and start tracking improvement. |
+| Faster success | Replace Best and reset the non-improvement count. |
+| Tie or slower success | Keep Best and count one non-improvement. |
+| Failure | Count one non-improvement only if a successful Best exists. |
 
-1. The first evaluation establishes a baseline, even if unsuccessful.
-2. Success beats failure.
-3. Among successes, fewer completion steps wins.
-4. Ties and further failures do not count as improvement.
+Five consecutive non-improvements stop that agent. A run can reach the step
+budget before any success. The user can then add training steps for unsolved
+agents without discarding their in-memory learner or episode state.
 
-Five consecutive non-improvements trigger early stopping **per agent**.
-This is a practical patience heuristic, not proof of convergence; it can stop
-before a successful strategy is discovered.
-
-The deterministic level and greedy policy usually repeat the same result.
-Evaluation measures this starting condition, not robustness to unseen levels.
-Training reward can fluctuate because exploration remains active and DQN updates
-can damage earlier behavior.
+Separate greedy results from exploratory rewards. A later policy can take
+longer or fail even after an earlier success. On this deterministic level,
+replaying one greedy policy tests the same starting condition. To compare
+algorithms, train with independent seeds under the same step budget. In a
+100,000-step pilot, none of the three Q-learning runs or three DQN runs reached
+the goal in evaluation. The app's default budget is provisional.
 
 ## 7. Checkpoints and code map
 
-Each worker retains separate **best** and **final** policies in IndexedDB under
-`<runId>/<agentId>/best` and `<runId>/<agentId>/final`, with episode/evaluation
-metadata. Group autosaving additionally publishes a latest-run manifest after all
-agents acknowledge storage. Watch AI can select individual saved policies.
+SQLite stores `<runId>/<agentId>/best` after the first successful evaluation and
+`<runId>/<agentId>/final` after automatic completion. The latest-run manifest
+references these records. Watch AI prefers a successful Best and allows manual
+selection of Final or another compatible policy. Loading stored DQN weights
+starts with fresh replay and optimizer state.
 
-Checkpoints preserve policies, not exact training trajectories: DQN replay,
-optimizer, target-network history, and RNG state are not restored. Continuing
-from saved DQN weights is fine-tuning. Browser data clearing removes checkpoints.
-
-| Source under `src/` | Responsibility |
+| Source | Responsibility |
 | --- | --- |
-| `game/level.ts` | Physics, rewards, Q-learning defaults, evaluation settings |
-| `game/environment.ts`, `physics.ts` | Transitions, reward bookkeeping, termination |
-| `game/observation.ts`, `observation-q.ts` | Feature vector and tabular encoding |
-| `rl/QLearningAgent.ts`, `DQNAgent.ts` | Value estimation and policy selection |
-| `rl/ReplayBuffer.ts`, `evaluation.ts` | Replay and isolated evaluation |
-| `rl/trainer.worker.ts` | Learning loop, best/final saves, early stopping |
-| `persistence/checkpoints.ts` | IndexedDB storage and compatibility validation |
+| [Game domain](src/modules/game/domain/) | Level, physics, reward and episode termination |
+| [RL domain and application](src/modules/reinforcement-learning/) | Observations and evaluation |
+| [Algorithms](src/modules/reinforcement-learning/infrastructure/algorithms/) | Q-learning, DQN and replay |
+| [Trainer worker](src/modules/reinforcement-learning/infrastructure/workers/trainer.worker.ts) | Learning, evaluation schedule, stopping and checkpoints |
+| [Policy persistence](src/modules/reinforcement-learning/infrastructure/persistence/checkpoints.ts) | Saved policies, compatibility and run manifest |

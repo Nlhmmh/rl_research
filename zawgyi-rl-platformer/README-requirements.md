@@ -116,7 +116,8 @@ Users can watch an AI agent play the game automatically.
 - Watch an untrained AI agent.
 - Watch a trained AI agent.
 - Select a specific saved run and agent, with algorithm, episode count, and save time shown.
-- Retain a shortcut for loading the latest saved policy.
+- Open a successful Best checkpoint when available and provide a shortcut to
+  reload the recommended policy.
 - Mark incompatible checkpoints and prevent selecting them for playback.
 - Clearly identify whether the AI is trained or untrained.
 
@@ -132,7 +133,9 @@ Users can train an AI agent to play the platformer.
 - Pause and resume training.
 - Stop training.
 - Restart training from the beginning.
-- Select the number of training episodes.
+- Set a hard simulator-step budget per agent. Default to 1,000,000 steps.
+- Let users add steps for agents that reach their budget without a successful
+  evaluation and resume those agents from their in-memory state.
 - Allow the AI to learn through repeated attempts.
 - Reward successful behavior.
 - Penalize unsuccessful behavior.
@@ -229,21 +232,16 @@ Provide a dashboard for monitoring training.
 
 **Training Information:**
 
-- Total training episodes.
-- Current episode.
-- Current reward.
-- Average reward.
-- Success rate.
-- Number of successful attempts.
-- Number of failed attempts.
-- Training progress.
-- Current AI status.
+- Current episode, steps used, and step budget per agent.
+- Latest and best greedy outcomes and steps to goal.
+- Furthest position in the latest greedy evaluation.
+- Current AI status, including solved and budget reached.
 
 **Training Charts:**
 
 - Rewards over time.
 - Average rewards.
-- Success rate over time.
+- Exploratory training success rate over time.
 
 All displayed information must reflect actual AI training results.
 
@@ -493,18 +491,17 @@ Training speed controls must affect the simulation speed while keeping the inter
 
 When multiple agents are training, show individual performance statistics.
 
-| Agent | Episode | Reward | Success Rate | Status  |
-| ----- | ------- | ------ | ------------ | ------- |
-| AI-1  | 120     | +75    | 65%          | Playing |
-| AI-2  | 115     | +40    | 52%          | Playing |
-| AI-3  | 128     | -20    | 38%          | Playing |
-| AI-4  | 119     | +100   | 72%          | Playing |
+| Agent | Episode | Latest greedy | Best greedy | Status |
+| --- | --- | --- | --- | --- |
+| AI-1 | 600 | Missed goal | Goal in 491 steps | Solved |
+| AI-2 | 600 | Missed goal | — | Training |
 
 _Illustrative values only._
 
 The dashboard must display actual training results and update during training.
 
-Users should be able to compare individual agents' performance, including rewards, completed episodes, successes, failures, and learning progress.
+Show exploratory rewards and success rates in the charts. Show greedy evaluation
+results separately in the agent table.
 
 ### 16.7 Single-Agent Training
 
@@ -537,7 +534,7 @@ Training Settings
 Number of AI Agents:
 (●) 1    ( ) 2    ( ) 4    ( ) 8
 
-Training Episodes: 5000
+Training Steps per Agent: 1,000,000
 Training Speed: 1× / 2× / 4× / Max
 
 [ Start Training ]  [ Pause ]  [ Stop ]
@@ -559,11 +556,9 @@ Training Speed: 1× / 2× / 4× / Max
 
 AGENT PERFORMANCE
 
-Agent    Episode   Reward   Success Rate
-AI-1      120       +75        65%
-AI-2      115       +40        52%
-AI-3      128       -20        38%
-AI-4      119      +100        72%
+Agent    Episode   Steps Used   Latest Greedy   Best Greedy
+AI-1      600       300,000      Missed goal     Goal in 491 steps
+AI-2      600       300,000      Missed goal     —
 
 ────────────────────────────────────────
 
@@ -584,6 +579,8 @@ AI-4      119      +100        72%
 8. Training progress is visible in real time.
 9. Users can compare agent performance.
 10. Users can save trained agents and watch their learned gameplay.
+11. Training reports whether each agent solved the level or exhausted its step
+    budget. Extending the budget continues only the unsolved agents.
 
 ### Final Requirement
 
@@ -605,27 +602,35 @@ The game must retain its three original modes:
 
 The main focus is not creating a complex platformer. It is creating an engaging and interactive environment for **learning, experimenting with, and visualizing Reinforcement Learning**.
 
-### Persistence and implementation boundaries
+### Evaluation and persistence
 
-- Store each agent policy and compatibility metadata in browser IndexedDB.
-- Publish the latest-run manifest only after all workers acknowledge successful
-  policy storage. Preserve the previous manifest if saving fails.
-- Pause before saving and wait for in-flight DQN updates before model serialization.
-- Watch AI must list stored policies across runs, including individual agents.
-- Train AI currently loads the latest run manifest; selecting arbitrary runs for
-  resumed training is a future extension.
-- Saves are policy checkpoints. DQN replay, optimizer, exact target state, and
-  random-generator state are not restored; continued training is fine-tuning.
-- Browser storage is scoped to the site origin and browser profile. Clearing
-  site data removes checkpoints. File export/import is a future extension.
-- Reject incompatible level, observation, or reward versions. Current versions
-  are observation `v2` and reward `v2`.
-- Q-learning uses finer distance bins near gaps and reuses states at equivalent
-  gap approaches. Default training is 5,000 episodes per independent agent.
+- Evaluate with exploration and learning disabled every 100 completed episodes
+  and at the step budget. Use a fresh episode from the normal spawn.
+- Save the first successful policy as Best. Replace it only with a faster
+  successful policy. Stop early after five consecutive evaluations without
+  improvement once Best exists. Report budget exhaustion when no evaluation
+  reached the goal.
+- Save Final on automatic completion, even if the last evaluation failed.
+  Keep Final and Best under the same run ID. Publish the latest-run manifest
+  only after all agents save their checkpoints.
+- Store policies and compatibility metadata in server-side SQLite. Scope access
+  to the browser session identified by a cookie.
+- Pause on manual Save and wait for any in-flight DQN update before serialization.
+- Watch AI lists saved policies across runs and disables incompatible entries.
+  Train AI loads the latest
+  saved run as a starting point with fresh DQN replay and optimizer state.
+- Validate the level, observation, and reward versions before loading. Current
+  observation and reward versions are `v2`.
+
+### Implementation boundaries
+
+- Q-learning uses finer distance bins near gaps and reuses states for equivalent
+  gap approaches.
 - Keep canonical physics and reward logic in pure TypeScript. Phaser renders
   snapshots; it must not define a different collision model.
-- Screen components own React state and layout. Human, Watch, and Train controllers
-  own game orchestration under `src/game`; workers and learners live under `src/rl`.
+- Screen components own React state and layout. Controllers coordinate
+  gameplay and training. Workers and learners live under
+  `src/modules/reinforcement-learning/`.
 - English/Burmese coverage remains a product requirement. Some diagnostic strings,
   chart headings, and statistics labels are currently English-only.
 - Existing sprite poses are selected from action and time; physically accurate
