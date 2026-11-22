@@ -2,13 +2,15 @@ import type * as tf from '@tensorflow/tfjs';
 import { get, listRecords, set } from './sqlite-client';
 import { LEVEL, OBSERVATION_VERSION } from '../../../game/domain/level';
 import { QLearningAgent } from '../algorithms/q-learning/QLearningAgent';
-import type { Algorithm } from '../workers/protocol';
+import type { Algorithm, TrainingStopReason } from '../workers/protocol';
+import type { DQNAgent } from '../algorithms/dqn/DQNAgent';
 import type { EvaluationResult } from '../../application/evaluation';
 
 export interface CheckpointDetails {
   kind?: 'best' | 'final';
   evaluation?: EvaluationResult;
-  stopReason?: 'episode-limit' | 'no-improvement';
+  stopReason?: TrainingStopReason | 'episode-limit';
+  totalSteps?: number;
 }
 
 export interface CheckpointMetadata {
@@ -24,12 +26,18 @@ export interface CheckpointMetadata {
   details?: CheckpointDetails;
 }
 
+export interface AgentCheckpoints {
+  finalId: string;
+  bestId?: string;
+}
+
 export interface RunManifest {
   schemaVersion: 1;
   runId: string;
   algorithm: Algorithm;
   levelId: string;
   agentIds: string[];
+  checkpoints?: Record<string, AgentCheckpoints>;
   observationVersion: typeof OBSERVATION_VERSION;
   rewardVersion: 'v2';
   saveType: 'policy-checkpoint';
@@ -106,8 +114,36 @@ export async function loadQAgent(id: string) {
 
 export function dqnHandler(id: string): tf.io.IOHandler {
   return {
+    async load() {
+      const saved = await get<{ model?: tf.io.ModelArtifacts }>(key(id));
+      const artifacts = saved?.model ?? (await get<tf.io.ModelArtifacts>(`${key(id)}/model`));
+      if (!artifacts) throw new Error(`Missing DQN model: ${id}`);
+      return artifacts;
+    },
+  };
+}
+
+export async function saveDqnAgent(
+  id: string,
+  agent: DQNAgent,
+  episode: number,
+  details?: CheckpointDetails,
+): Promise<void> {
+  const metadata: CheckpointMetadata = {
+    schemaVersion: 1,
+    id,
+    algorithm: 'dqn',
+    savedAt: new Date().toISOString(),
+    levelId: LEVEL.id,
+    observationVersion: OBSERVATION_VERSION,
+    rewardVersion: 'v2',
+    episode,
+    epsilon: agent.epsilon,
+    details,
+  };
+  await agent.online.save({
     async save(artifacts) {
-      await set(`${key(id)}/model`, artifacts);
+      await set(key(id), { metadata, model: artifacts });
       return {
         modelArtifactsInfo: {
           dateSaved: new Date(),
@@ -122,33 +158,33 @@ export function dqnHandler(id: string): tf.io.IOHandler {
         },
       };
     },
-    async load() {
-      const artifacts = await get<tf.io.ModelArtifacts>(`${key(id)}/model`);
-      if (!artifacts) throw new Error(`Missing DQN model: ${id}`);
-      return artifacts;
-    },
-  };
+  });
 }
 
-export async function saveDqnMetadata(
-  id: string,
-  episode: number,
-  epsilon: number,
-  details?: CheckpointDetails,
-): Promise<void> {
-  const metadata: CheckpointMetadata = {
-    schemaVersion: 1,
-    id,
-    algorithm: 'dqn',
-    savedAt: new Date().toISOString(),
-    levelId: LEVEL.id,
-    observationVersion: OBSERVATION_VERSION,
-    rewardVersion: 'v2',
-    episode,
-    epsilon,
-    details,
-  };
-  await set(key(id), { metadata });
+export function runCheckpointId(manifest: RunManifest, agentId: string): string {
+  return manifest.checkpoints?.[agentId]?.finalId ?? `${manifest.runId}/${agentId}`;
+}
+
+export function preferredWatchPolicy(
+  policies: SavedPolicy[],
+  manifest?: RunManifest,
+): string | undefined {
+  const compatible = policies.filter((item) => item.compatible).map((item) => item.metadata);
+  const solved = compatible.filter((item) => item.details?.evaluation?.success);
+  const preferred = solved.filter((item) => item.details?.kind === 'best');
+  const latestBestIds = Object.values(manifest?.checkpoints ?? {}).map((item) => item.bestId);
+  const latestBest = preferred
+    .filter((item) => latestBestIds.includes(item.id))
+    .sort((a, b) => a.details!.evaluation!.steps - b.details!.evaluation!.steps)[0];
+  return (
+    latestBest?.id ??
+    preferred[0]?.id ??
+    solved[0]?.id ??
+    compatible.find((item) =>
+      manifest?.agentIds.some((id) => runCheckpointId(manifest, id) === item.id),
+    )?.id ??
+    compatible[0]?.id
+  );
 }
 
 export async function loadMetadata(id: string, algorithm?: Algorithm): Promise<CheckpointMetadata> {

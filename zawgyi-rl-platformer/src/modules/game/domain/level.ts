@@ -22,6 +22,7 @@ export const LEVEL = {
 
 export const FIXED_DT = 1 / 60; // 60 FPS
 export const EVALUATION = { everyEpisodes: 100, patience: 5 } as const;
+export const TRAINING = { defaultStepBudget: 1_000_000, maxStepBudget: 50_000_000 } as const;
 export const RUN_SPEED = 180;
 export const GRAVITY = 900;
 export const JUMP_SPEED = 390;
@@ -71,7 +72,6 @@ export const Q_LEARNING = {
   epsilon: 1,
   minEpsilon: 0.05,
   epsilonDecay: 0.997,
-  defaultEpisodes: 5000,
 } as const;
 export const OBSERVATION_VERSION = 'v2' as const;
 export const VIEW = { width: 960, height: 540, background: '#c4e3d2' } as const;

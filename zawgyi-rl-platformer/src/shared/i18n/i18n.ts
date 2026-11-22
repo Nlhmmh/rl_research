@@ -6,7 +6,7 @@ export const translations = {
     translation: {
       gameTitle: "Zawgyi: Quest for the Philosopher's Stone",
       watch: {
-        goalReached: "Goal reached! AI found the Philosopher’s Stone.",
+        goalReached: 'Goal reached! AI found the Philosopher’s Stone.',
         savedPolicy: 'Saved policy',
         choosePolicy: 'Choose a run and agent',
         noPolicies: 'No saved policies',
@@ -43,9 +43,11 @@ export const translations = {
         visualization: 'Game visualization',
         renderOn: 'Render agents',
         renderOff: 'Headless training',
-        renderDisabled: 'Rendering is off. Training and charts continue. Use Max speed for fastest training.',
+        renderDisabled:
+          'Rendering is off. Training and charts continue. Use Max speed for fastest training.',
         agents: 'Number of agents',
-        episodes: 'Episodes per agent',
+        stepBudget: 'Training steps per agent',
+        extend: 'Extend step budget',
         speed: 'Training speed',
         camera: 'Camera',
         overview: 'Overview',
@@ -104,9 +106,11 @@ export const translations = {
         visualization: 'ဂိမ်းမြင်ကွင်း',
         renderOn: 'AI များကို ပြရန်',
         renderOff: 'မြင်ကွင်းမပါဘဲ လေ့ကျင့်ရန်',
-        renderDisabled: 'မြင်ကွင်းကို ပိတ်ထားပါသည်။ လေ့ကျင့်မှုနှင့် ဂရပ်များ ဆက်လက်လုပ်ဆောင်နေပါသည်။ အမြန်ဆုံးလေ့ကျင့်ရန် Max ကို ရွေးပါ။',
+        renderDisabled:
+          'မြင်ကွင်းကို ပိတ်ထားပါသည်။ လေ့ကျင့်မှုနှင့် ဂရပ်များ ဆက်လက်လုပ်ဆောင်နေပါသည်။ အမြန်ဆုံးလေ့ကျင့်ရန် Max ကို ရွေးပါ။',
         agents: 'AI အရေအတွက်',
-        episodes: 'AI တစ်ခုချင်းစီ၏ လေ့ကျင့်မှုအကြိမ်ရေ',
+        stepBudget: 'AI တစ်ခုချင်းစီအတွက် လေ့ကျင့်မှုခြေလှမ်း',
+        extend: 'လေ့ကျင့်မှုခြေလှမ်း တိုးရန်',
         speed: 'လေ့ကျင့်မှုအမြန်နှုန်း',
         camera: 'ကင်မရာ',
         overview: 'မြင်ကွင်းအပြည့်',

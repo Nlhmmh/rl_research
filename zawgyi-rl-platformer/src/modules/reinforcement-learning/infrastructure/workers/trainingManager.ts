@@ -1,9 +1,8 @@
 import type { AgentSnapshot } from '../../../game/domain/types';
 import type {
   AgentStats,
-  Algorithm,
   HistoryPoint,
-  TrainingSpeed,
+  TrainingRunOptions,
   WorkerCommand,
   WorkerEvent,
 } from './protocol';
@@ -23,18 +22,12 @@ export class TrainingManager {
     this.callbacks = callbacks;
   }
 
-  start(
-    agentCount: 1 | 2 | 4 | 8,
-    algorithm: Algorithm,
-    episodes: number,
-    speed: TrainingSpeed,
-    renderAgents = true,
-  ): void {
+  start(agentCount: 1 | 2 | 4 | 8, options: TrainingRunOptions): void {
     this.stop();
     for (let index = 0; index < agentCount; index++) {
       const id = `AI-${index + 1}`;
       const worker = this.makeWorker(id);
-      worker.postMessage({ type: 'start', id, algorithm, episodes, speed, renderAgents } satisfies WorkerCommand);
+      worker.postMessage({ type: 'start', id, ...options } satisfies WorkerCommand);
     }
   }
 
@@ -46,6 +39,7 @@ export class TrainingManager {
   private makeWorker(id: string): Worker {
     const worker = new Worker(new URL('./trainer.worker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (event: MessageEvent<WorkerEvent>) => {
+      if (this.workers.get(id) !== worker) return;
       const message = event.data;
       if (message.type === 'snapshot') {
         this.latest.set(message.agent.id, message.agent);
@@ -54,8 +48,10 @@ export class TrainingManager {
       else if (message.type === 'history') this.callbacks.onHistory(message.point);
       this.callbacks.onEvent?.(message);
     };
-    worker.onerror = (error) =>
+    worker.onerror = (error) => {
+      if (this.workers.get(id) !== worker) return;
       this.callbacks.onEvent?.({ type: 'error', id, message: error.message || 'Worker failed' });
+    };
     this.workers.set(id, worker);
     return worker;
   }

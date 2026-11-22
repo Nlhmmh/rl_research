@@ -3,17 +3,22 @@ import { useTranslation } from 'react-i18next';
 import { AgentStatsTable } from './AgentStatsTable';
 import { TrainingChart } from './TrainingCharts';
 import { GameCanvas } from '../../modules/game/presentation/GameCanvas';
-import { Q_LEARNING } from '../../modules/game/domain/level';
+import { TRAINING } from '../../modules/game/domain/level';
 import { createTrainGame, type AgentCount } from '../../modules/training/application/trainGame';
 import type { AgentSnapshot } from '../../modules/game/domain/types';
-import type { AgentStats, Algorithm, HistoryPoint, TrainingSpeed } from '../../modules/reinforcement-learning/infrastructure/workers/protocol';
+import type {
+  AgentStats,
+  Algorithm,
+  HistoryPoint,
+  TrainingSpeed,
+} from '../../modules/reinforcement-learning/infrastructure/workers/protocol';
 import styles from './TrainAI.module.css';
 
 export function TrainAI({ onBack, onWatch }: { onBack: () => void; onWatch: () => void }) {
   const { t } = useTranslation();
   const [algorithm, setAlgorithm] = useState<Algorithm>('q-learning');
   const [agentCount, setAgentCount] = useState<AgentCount>(1);
-  const [episodes, setEpisodes] = useState<number>(Q_LEARNING.defaultEpisodes);
+  const [stepBudget, setStepBudget] = useState<number>(TRAINING.defaultStepBudget);
   const [speed, setSpeed] = useState<TrainingSpeed>('max');
   const [renderAgents, setRenderAgents] = useState(true);
   const [snapshots, setSnapshots] = useState<AgentSnapshot[]>([]);
@@ -21,6 +26,7 @@ export function TrainAI({ onBack, onWatch }: { onBack: () => void; onWatch: () =
   const [history, setHistory] = useState<HistoryPoint[]>([]);
   const [cameraMode, setCameraMode] = useState<'overview' | 'follow'>('overview');
   const [selectedId, setSelectedId] = useState('AI-1');
+  const [canExtend, setCanExtend] = useState(false);
   const [active, setActive] = useState(false);
   const [message, setMessage] = useState('Ready to train independent agents.');
   const gameRef = useRef<ReturnType<typeof createTrainGame> | null>(null);
@@ -33,6 +39,7 @@ export function TrainAI({ onBack, onWatch }: { onBack: () => void; onWatch: () =
       onStats: (stats) => setStatsById((current) => ({ ...current, [stats.id]: stats })),
       onHistory: (point) => setHistory((current) => [...current.slice(-7999), point]),
       onActive: setActive,
+      onExtendAvailable: setCanExtend,
       onMessage: setMessage,
       onAlgorithm: setAlgorithm,
       onAgentCount: setAgentCount,
@@ -52,7 +59,7 @@ export function TrainAI({ onBack, onWatch }: { onBack: () => void; onWatch: () =
   const agentIds = Array.from({ length: agentCount }, (_, index) => `AI-${index + 1}`);
 
   function start() {
-    gameRef.current?.start({ algorithm, agentCount, episodes, speed, renderAgents });
+    gameRef.current?.start({ algorithm, agentCount, stepBudget, speed, renderAgents });
   }
   function pause() {
     gameRef.current?.pause();
@@ -127,14 +134,14 @@ export function TrainAI({ onBack, onWatch }: { onBack: () => void; onWatch: () =
             </select>
           </label>
           <label>
-            {t('training.episodes')}
+            {t('training.stepBudget')}
             <input
               disabled={active}
               type="number"
               min="1"
-              max="50000"
-              value={episodes}
-              onChange={(e) => setEpisodes(Number(e.target.value))}
+              max={TRAINING.maxStepBudget}
+              value={stepBudget}
+              onChange={(e) => setStepBudget(Number(e.target.value))}
             />
           </label>
           <label>
@@ -177,10 +184,19 @@ export function TrainAI({ onBack, onWatch }: { onBack: () => void; onWatch: () =
             <button className="btn-primary" disabled={active} onClick={start}>
               {t('common.start')}
             </button>
-            <button className="btn-secondary" onClick={pause}>
+            {canExtend && (
+              <button
+                className="btn-secondary"
+                disabled={active}
+                onClick={() => gameRef.current?.extend(stepBudget)}
+              >
+                {t('training.extend')}
+              </button>
+            )}
+            <button className="btn-secondary" disabled={!active} onClick={pause}>
               {t('common.pause')}
             </button>
-            <button className="btn-secondary" onClick={resume}>
+            <button className="btn-secondary" disabled={!active} onClick={resume}>
               {t('common.resume')}
             </button>
             <button className="btn-secondary" onClick={stop}>
@@ -192,7 +208,7 @@ export function TrainAI({ onBack, onWatch }: { onBack: () => void; onWatch: () =
             <button className="btn-secondary" onClick={() => void save()}>
               {t('common.save')}
             </button>
-            <button className="btn-secondary" onClick={() => void load()}>
+            <button className="btn-secondary" disabled={active} onClick={() => void load()}>
               {t('common.load')}
             </button>
           </div>
@@ -232,7 +248,7 @@ export function TrainAI({ onBack, onWatch }: { onBack: () => void; onWatch: () =
           history={history}
           agentIds={agentIds}
           metric="successRate100"
-          title="Rolling success rate (%)"
+          title="Exploratory training success rate (%)"
         />
       </div>
     </main>

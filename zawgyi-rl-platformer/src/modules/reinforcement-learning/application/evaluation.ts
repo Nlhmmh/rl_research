@@ -6,14 +6,11 @@ export interface EvaluationResult {
   success: boolean;
   steps: number;
   reward: number;
+  furthestX?: number;
 }
 
 export function isBetterEvaluation(candidate: EvaluationResult, best: EvaluationResult | null) {
-  return (
-    best === null ||
-    (candidate.success && !best.success) ||
-    (candidate.success && best.success && candidate.steps < best.steps)
-  );
+  return candidate.success && (!best?.success || candidate.steps < best.steps);
 }
 
 // A fresh fixed-level environment; caller supplies inference only.
@@ -25,11 +22,13 @@ export async function evaluatePolicy(
   const env = new HimavantaEnvironment();
   let state = env.reset();
   let reward = 0;
+  let furthestX = state.x;
   while (!state.done) {
     if (!(await continueEvaluation())) return null;
     const result = env.step(act(state));
     state = result.state;
+    furthestX = Math.max(furthestX, state.x);
     reward += result.reward;
   }
-  return { episode, success: state.success, steps: state.steps, reward };
+  return { episode, success: state.success, steps: state.steps, reward, furthestX };
 }

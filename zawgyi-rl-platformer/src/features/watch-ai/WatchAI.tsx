@@ -5,7 +5,10 @@ import { HimavantaEnvironment } from '../../modules/game/domain/environment';
 import { watchSnapshot } from '../../modules/game/application/snapshot';
 import { ACTION_NAMES, type AgentSnapshot } from '../../modules/game/domain/types';
 import { createWatchGame, type WatchSpeed } from './watchGame';
-import { listPolicies, type SavedPolicy } from '../../modules/reinforcement-learning/infrastructure/persistence/checkpoints';
+import {
+  listPolicies,
+  type SavedPolicy,
+} from '../../modules/reinforcement-learning/infrastructure/persistence/checkpoints';
 import styles from './WatchAI.module.css';
 
 export function WatchAI({ onBack }: { onBack: () => void }) {
@@ -19,7 +22,7 @@ export function WatchAI({ onBack }: { onBack: () => void }) {
   const [message, setMessage] = useState('Random untrained baseline selected.');
   const [policies, setPolicies] = useState<SavedPolicy[]>([]);
   const [selectedPolicy, setSelectedPolicy] = useState('');
-  const [loadingPolicy, setLoadingPolicy] = useState(false);
+  const [loadingPolicy, setLoadingPolicy] = useState(true);
 
   useEffect(() => {
     const game = createWatchGame({
@@ -32,11 +35,17 @@ export function WatchAI({ onBack }: { onBack: () => void }) {
     game.start();
     let cancelled = false;
     void listPolicies()
-      .then((saved) => {
-        if (!cancelled) setPolicies(saved);
+      .then(async (saved) => {
+        if (cancelled) return;
+        setPolicies(saved);
+        const id = await game.loadPreferred(saved);
+        if (!cancelled && id) setSelectedPolicy(id);
       })
       .catch((error: unknown) => {
         if (!cancelled) setMessage(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPolicy(false);
       });
     return () => {
       cancelled = true;
@@ -57,8 +66,14 @@ export function WatchAI({ onBack }: { onBack: () => void }) {
   function useRandom() {
     gameRef.current?.useRandom();
   }
-  async function loadLatest() {
-    await gameRef.current?.loadLatest();
+  async function loadPreferred() {
+    setLoadingPolicy(true);
+    try {
+      const id = await gameRef.current?.loadPreferred(policies);
+      if (id) setSelectedPolicy(id);
+    } finally {
+      setLoadingPolicy(false);
+    }
   }
 
   async function loadSelectedPolicy() {
@@ -117,10 +132,14 @@ export function WatchAI({ onBack }: { onBack: () => void }) {
           </button>
         </div>
         <div className={styles.controls}>
-          <button className="btn-secondary" onClick={() => void loadLatest()}>
-            Load latest trained AI
+          <button
+            className="btn-secondary"
+            disabled={loadingPolicy || !policies.some((item) => item.compatible)}
+            onClick={() => void loadPreferred()}
+          >
+            Load recommended policy
           </button>
-          <button className="btn-secondary" onClick={useRandom}>
+          <button className="btn-secondary" disabled={loadingPolicy} onClick={useRandom}>
             Use random baseline
           </button>
           {[1, 2, 4].map((value) => (
@@ -152,7 +171,12 @@ export function WatchAI({ onBack }: { onBack: () => void }) {
           <span>Reward: {snapshot.reward.toFixed(1)}</span>
           <span>Status: {snapshot.status}</span>
         </div>
-        <GameCanvas snapshots={[snapshot]} cameraMode="follow" selectedAgentId="WATCH-AI" victoryAudio />
+        <GameCanvas
+          snapshots={[snapshot]}
+          cameraMode="follow"
+          selectedAgentId="WATCH-AI"
+          victoryAudio
+        />
         {(snapshot.status === 'success' || snapshot.status === 'failed') && (
           <div
             className={`${styles.outcome} ${snapshot.status === 'success' ? styles.success : styles.failure}`}

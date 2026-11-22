@@ -4,13 +4,25 @@ import type { EvaluationResult } from '../../application/evaluation';
 export type Algorithm = 'q-learning' | 'dqn';
 export type TrainingSpeed = 1 | 2 | 4 | 'max';
 export type TrainingStatus = 'idle' | 'running' | 'paused' | 'complete' | 'stopped' | 'error';
+export type TrainingStopReason = 'step-budget' | 'no-improvement';
+
+export interface TrainingRunOptions {
+  runId: string;
+  algorithm: Algorithm;
+  stepBudget: number;
+  speed: TrainingSpeed;
+  renderAgents?: boolean;
+}
 
 export interface AgentStats {
   id: string;
   algorithm: Algorithm;
   episode: number;
-  targetEpisodes: number;
+  stepBudget: number;
   totalSteps: number;
+  latestEvaluation?: EvaluationResult;
+  bestEvaluation?: EvaluationResult;
+  stopReason?: TrainingStopReason;
   episodeReward: number;
   averageReward100: number;
   successRate100: number;
@@ -31,14 +43,7 @@ export interface HistoryPoint {
 }
 
 export type WorkerCommand =
-  | {
-      type: 'start';
-      id: string;
-      algorithm: Algorithm;
-      episodes: number;
-      speed: TrainingSpeed;
-      renderAgents?: boolean;
-    }
+  | ({ type: 'start'; id: string } & TrainingRunOptions)
   | { type: 'pause' }
   | { type: 'resume' }
   | { type: 'stop' }
@@ -52,14 +57,20 @@ export type WorkerEvent =
       type: 'evaluation';
       id: string;
       result: EvaluationResult;
-      best: EvaluationResult;
+      best: EvaluationResult | null;
       staleEvaluations: number;
     }
-  | { type: 'policy-saved'; id: string; checkpointId: string; kind: 'best' | 'final' }
   | { type: 'snapshot'; agent: AgentSnapshot }
   | { type: 'stats'; stats: AgentStats }
   | { type: 'history'; point: HistoryPoint }
   | { type: 'saved'; id: string; checkpointId: string }
   | { type: 'loaded'; id: string; checkpointId: string; algorithm: Algorithm }
-  | { type: 'complete'; id: string; reason?: 'episode-limit' | 'no-improvement' }
+  | {
+      type: 'complete';
+      id: string;
+      runId: string;
+      reason: TrainingStopReason;
+      finalId: string;
+      bestId?: string;
+    }
   | { type: 'error'; id: string; message: string };

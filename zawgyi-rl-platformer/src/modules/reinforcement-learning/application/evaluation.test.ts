@@ -12,7 +12,7 @@ const result = (success: boolean, steps: number): EvaluationResult => ({
 });
 
 it('ranks completion ahead of speed and ignores tied or failed attempts', () => {
-  expect(isBetterEvaluation(result(false, 50), null)).toBe(true);
+  expect(isBetterEvaluation(result(false, 50), null)).toBe(false);
   expect(isBetterEvaluation(result(true, 500), result(false, 50))).toBe(true);
   expect(isBetterEvaluation(result(false, 20), result(true, 500))).toBe(false);
   expect(isBetterEvaluation(result(true, 490), result(true, 500))).toBe(true);
@@ -26,6 +26,7 @@ it('evaluates without changing Q-values or epsilon', async () => {
   const evaluation = await evaluatePolicy(100, (state) => agent.act(qStateKey(state), false));
   expect(evaluation?.episode).toBe(100);
   expect(evaluation?.steps).toBe(LEVEL.maxSteps);
+  expect(evaluation?.furthestX).toBe(LEVEL.spawnX);
   expect(agent.serialize()).toEqual(before);
 });
 

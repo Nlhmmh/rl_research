@@ -1,5 +1,13 @@
 import * as tf from '@tensorflow/tfjs';
-import { dqnHandler, loadManifest, loadMetadata, loadQAgent } from '../../modules/reinforcement-learning/infrastructure/persistence/checkpoints';
+import {
+  dqnHandler,
+  listPolicies,
+  loadManifest,
+  loadMetadata,
+  loadQAgent,
+  preferredWatchPolicy,
+  type SavedPolicy,
+} from '../../modules/reinforcement-learning/infrastructure/persistence/checkpoints';
 import { DQNAgent } from '../../modules/reinforcement-learning/infrastructure/algorithms/dqn/DQNAgent';
 import type { QLearningAgent } from '../../modules/reinforcement-learning/infrastructure/algorithms/q-learning/QLearningAgent';
 import { HimavantaEnvironment } from '../../modules/game/domain/environment';
@@ -7,12 +15,17 @@ import { TIMING } from '../../modules/game/domain/level';
 import { observe } from '../../modules/reinforcement-learning/domain/policies/observation';
 import { qStateKey } from '../../modules/reinforcement-learning/infrastructure/algorithms/q-learning/observation-q';
 import { watchSnapshot } from '../../modules/game/application/snapshot';
-import { ACTION, ACTIONS, type Action, type AgentSnapshot, type PlayerState } from '../../modules/game/domain/types';
+import {
+  ACTION,
+  ACTIONS,
+  type Action,
+  type AgentSnapshot,
+  type PlayerState,
+} from '../../modules/game/domain/types';
 
 export type WatchSpeed = 1 | 2 | 4;
 type Policy =
-  | { q: QLearningAgent; dqn?: never; label: string }
-  | { dqn: DQNAgent; q?: never; label: string };
+  { q: QLearningAgent; dqn?: never; label: string } | { dqn: DQNAgent; q?: never; label: string };
 
 interface WatchGameCallbacks {
   onSnapshot: (snapshot: AgentSnapshot) => void;
@@ -105,13 +118,17 @@ export function createWatchGame(callbacks: WatchGameCallbacks) {
     }
   }
 
-  async function loadPolicy(checkpointId?: string) {
+  async function loadPolicy(checkpointId?: string, saved?: SavedPolicy[]) {
     const version = ++loadVersion;
     try {
       let id = checkpointId;
       if (!id) {
-        const manifest = await loadManifest();
-        id = `${manifest.runId}/${manifest.agentIds[0]}`;
+        const [policies, manifest] = await Promise.all([
+          saved ?? listPolicies(),
+          loadManifest().catch(() => undefined),
+        ]);
+        id = preferredWatchPolicy(policies, manifest);
+        if (!id) return;
       }
       const loaded = await readPolicy(id);
       if (disposed || version !== loadVersion) {
@@ -122,6 +139,7 @@ export function createWatchGame(callbacks: WatchGameCallbacks) {
       policy = loaded;
       callbacks.onMessage(`Loaded ${policy.label}. Exploration is off.`);
       restart();
+      return id;
     } catch (error) {
       if (!disposed && version === loadVersion) {
         callbacks.onMessage(error instanceof Error ? error.message : String(error));
@@ -129,7 +147,9 @@ export function createWatchGame(callbacks: WatchGameCallbacks) {
     }
   }
 
-  async function loadLatest() { await loadPolicy(); }
+  async function loadPreferred(saved?: SavedPolicy[]) {
+    return loadPolicy(undefined, saved);
+  }
 
   function useRandom() {
     loadVersion++;
@@ -152,5 +172,14 @@ export function createWatchGame(callbacks: WatchGameCallbacks) {
     policy = null;
   }
 
-  return { start, dispose, restart, togglePause, changeSpeed, loadLatest, loadPolicy, useRandom };
+  return {
+    start,
+    dispose,
+    restart,
+    togglePause,
+    changeSpeed,
+    loadPreferred,
+    loadPolicy,
+    useRandom,
+  };
 }
