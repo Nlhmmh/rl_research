@@ -2,6 +2,7 @@
 import * as tf from '@tensorflow/tfjs';
 import type { PlayerState } from '../../../game/domain/types';
 import { HimavantaEnvironment } from '../../../game/domain/environment';
+import { DQN_CONFIG } from '../../domain/policies/dqnConfig';
 import { observe } from '../../domain/policies/observation';
 import { qStateKey } from '../algorithms/q-learning/observation-q';
 import { EVALUATION, TIMING } from '../../../game/domain/level';
@@ -177,7 +178,7 @@ async function train({
             nextState: observe(result.state),
             done: result.done,
           });
-          if (totalSteps % 4 === 0) {
+          if (totalSteps % DQN_CONFIG.updateEvery === 0) {
             pendingUpdate = dqn!.trainBatch();
             await pendingUpdate;
           }

@@ -74,6 +74,7 @@ export const Q_LEARNING = {
   epsilonDecay: 0.997,
 } as const;
 export const OBSERVATION_VERSION = 'v2' as const;
+export const REWARD_VERSION = 'v2' as const;
 export const VIEW = { width: 960, height: 540, background: '#c4e3d2' } as const;
 export const VICTORY = {
   frameWidth: 543,

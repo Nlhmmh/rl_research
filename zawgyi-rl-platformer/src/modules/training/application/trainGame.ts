@@ -1,4 +1,10 @@
-import { EVALUATION, LEVEL, OBSERVATION_VERSION, TRAINING } from '../../game/domain/level';
+import {
+  EVALUATION,
+  LEVEL,
+  OBSERVATION_VERSION,
+  REWARD_VERSION,
+  TRAINING,
+} from '../../game/domain/level';
 import type { AgentSnapshot } from '../../game/domain/types';
 import {
   loadManifest,
@@ -89,7 +95,7 @@ export function createTrainGame(callbacks: TrainGameCallbacks) {
       agentIds: manager.ids(),
       checkpoints,
       observationVersion: OBSERVATION_VERSION,
-      rewardVersion: 'v2',
+      rewardVersion: REWARD_VERSION,
       saveType: 'policy-checkpoint',
       savedAt: new Date().toISOString(),
     };

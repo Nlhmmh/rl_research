@@ -1,6 +1,6 @@
 import type * as tf from '@tensorflow/tfjs';
 import { get, listRecords, set } from './sqlite-client';
-import { LEVEL, OBSERVATION_VERSION } from '../../../game/domain/level';
+import { LEVEL, OBSERVATION_VERSION, REWARD_VERSION } from '../../../game/domain/level';
 import { QLearningAgent } from '../algorithms/q-learning/QLearningAgent';
 import type { Algorithm, TrainingStopReason } from '../workers/protocol';
 import type { DQNAgent } from '../algorithms/dqn/DQNAgent';
@@ -11,6 +11,7 @@ export interface CheckpointDetails {
   evaluation?: EvaluationResult;
   stopReason?: TrainingStopReason | 'episode-limit';
   totalSteps?: number;
+  seed?: number;
 }
 
 export interface CheckpointMetadata {
@@ -20,7 +21,7 @@ export interface CheckpointMetadata {
   savedAt: string;
   levelId: string;
   observationVersion: typeof OBSERVATION_VERSION;
-  rewardVersion: 'v2';
+  rewardVersion: typeof REWARD_VERSION;
   episode: number;
   epsilon: number;
   details?: CheckpointDetails;
@@ -39,7 +40,7 @@ export interface RunManifest {
   agentIds: string[];
   checkpoints?: Record<string, AgentCheckpoints>;
   observationVersion: typeof OBSERVATION_VERSION;
-  rewardVersion: 'v2';
+  rewardVersion: typeof REWARD_VERSION;
   saveType: 'policy-checkpoint';
   savedAt: string;
 }
@@ -72,7 +73,7 @@ function validate(metadata: CheckpointMetadata, algorithm?: Algorithm): void {
     metadata.schemaVersion !== 1 ||
     metadata.levelId !== LEVEL.id ||
     metadata.observationVersion !== OBSERVATION_VERSION ||
-    metadata.rewardVersion !== 'v2' ||
+    metadata.rewardVersion !== REWARD_VERSION ||
     (algorithm && metadata.algorithm !== algorithm)
   ) {
     throw new Error('Checkpoint is incompatible with the current environment');
@@ -92,7 +93,7 @@ export async function saveQAgent(
     savedAt: new Date().toISOString(),
     levelId: LEVEL.id,
     observationVersion: OBSERVATION_VERSION,
-    rewardVersion: 'v2',
+    rewardVersion: REWARD_VERSION,
     episode,
     epsilon: agent.epsilon,
     details,
@@ -136,7 +137,7 @@ export async function saveDqnAgent(
     savedAt: new Date().toISOString(),
     levelId: LEVEL.id,
     observationVersion: OBSERVATION_VERSION,
-    rewardVersion: 'v2',
+    rewardVersion: REWARD_VERSION,
     episode,
     epsilon: agent.epsilon,
     details,

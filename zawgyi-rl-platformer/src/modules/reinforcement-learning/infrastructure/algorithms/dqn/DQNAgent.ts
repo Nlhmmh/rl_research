@@ -1,29 +1,36 @@
 import * as tf from '@tensorflow/tfjs';
+import { DQN_CONFIG } from '../../../domain/policies/dqnConfig';
 import { OBSERVATION_SIZE } from '../../../domain/policies/observation';
 import { ACTIONS, type Action } from '../../../../game/domain/types';
 import { ReplayBuffer, type Experience } from './ReplayBuffer';
 
 const ACTION_COUNT = ACTIONS.length;
-const BATCH_SIZE = 32;
+const BATCH_SIZE = DQN_CONFIG.batchSize;
 
-function createNetwork(): tf.Sequential {
+export function createDqnNetwork(): tf.Sequential {
   const model = tf.sequential();
-  model.add(tf.layers.dense({ inputShape: [OBSERVATION_SIZE], units: 64, activation: 'relu' }));
-  model.add(tf.layers.dense({ units: 64, activation: 'relu' }));
+  model.add(
+    tf.layers.dense({
+      inputShape: [OBSERVATION_SIZE],
+      units: DQN_CONFIG.hiddenUnits[0],
+      activation: 'relu',
+    }),
+  );
+  model.add(tf.layers.dense({ units: DQN_CONFIG.hiddenUnits[1], activation: 'relu' }));
   model.add(tf.layers.dense({ units: ACTION_COUNT, activation: 'linear' }));
   return model;
 }
 
 export class DQNAgent {
-  online: tf.LayersModel = createNetwork();
-  target: tf.LayersModel = createNetwork();
-  replay = new ReplayBuffer();
-  epsilon = 1;
-  minEpsilon = 0.05;
-  epsilonDecay = 0.995;
-  gamma = 0.99;
+  online: tf.LayersModel = createDqnNetwork();
+  target: tf.LayersModel = createDqnNetwork();
+  replay = new ReplayBuffer(DQN_CONFIG.replayCapacity);
+  epsilon: number = DQN_CONFIG.epsilon;
+  minEpsilon: number = DQN_CONFIG.minEpsilon;
+  epsilonDecay: number = DQN_CONFIG.epsilonDecay;
+  gamma: number = DQN_CONFIG.gamma;
   trainingUpdates = 0;
-  targetUpdateEvery = 250;
+  targetUpdateEvery: number = DQN_CONFIG.targetUpdateEvery;
 
   constructor() {
     this.compileOnline();
@@ -31,7 +38,10 @@ export class DQNAgent {
   }
 
   private compileOnline(): void {
-    this.online.compile({ optimizer: tf.train.adam(0.001), loss: 'meanSquaredError' });
+    this.online.compile({
+      optimizer: tf.train.adam(DQN_CONFIG.learningRate),
+      loss: 'meanSquaredError',
+    });
   }
 
   private copyOnlineToTarget(): void {

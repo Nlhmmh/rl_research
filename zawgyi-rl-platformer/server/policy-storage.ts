@@ -7,10 +7,21 @@ import type { Plugin } from 'vite';
 
 const API = '/api/policies';
 const COOKIE = 'zawgyi_browser';
+const OFFLINE_SCOPE = 'offline-local';
 const SESSION_LIFETIME_SECONDS = 365 * 24 * 60 * 60;
 const MAX_BODY_BYTES = 32 * 1024 * 1024;
 const VALID_KEY =
   /^zawgyi\/(?:latest-manifest|legacy-imported|checkpoint\/[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*)$/;
+
+function isLocalBrowser(req: IncomingMessage): boolean {
+  return (
+    /^(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i.test(req.headers.host ?? '') &&
+    ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '') &&
+    !req.headers.forwarded &&
+    !req.headers['x-forwarded-for'] &&
+    !req.headers['x-forwarded-host']
+  );
+}
 
 function reply(res: ServerResponse, status: number, body: string) {
   res.writeHead(status, {
@@ -84,12 +95,24 @@ export function createPolicyApi(db: DatabaseSync) {
         return reply(res, 401, '{"error":"Browser session is unavailable. Refresh the page."}');
       const key = url.searchParams.get('key');
       if (url.pathname === API && req.method === 'GET') {
+        const includeOffline = isLocalBrowser(req);
         if (key === null) {
-          const records = list.all(cookie).map((row) => JSON.parse(String(row.metadata)));
-          return reply(res, 200, JSON.stringify(records));
+          const rows = includeOffline
+            ? [...list.all(OFFLINE_SCOPE), ...list.all(cookie)]
+            : list.all(cookie);
+          const policies = new Map<string, unknown>();
+          for (const row of rows) {
+            const metadata = JSON.parse(String(row.metadata));
+            policies.set(metadata.id, metadata);
+          }
+          return reply(res, 200, JSON.stringify([...policies.values()]));
         }
         if (!VALID_KEY.test(key)) return reply(res, 400, '{"error":"Invalid checkpoint key"}');
-        const record = read.get(cookie, key);
+        const record =
+          read.get(cookie, key) ??
+          (includeOffline && key.startsWith('zawgyi/checkpoint/')
+            ? read.get(OFFLINE_SCOPE, key)
+            : undefined);
         return reply(res, 200, record ? String(record.value) : 'null');
       }
       if (

@@ -11,6 +11,8 @@ import {
 } from '../../modules/reinforcement-learning/infrastructure/persistence/checkpoints';
 import styles from './WatchAI.module.css';
 
+const POLICY_REFRESH_MS = 5_000;
+
 export function WatchAI({ onBack }: { onBack: () => void }) {
   const { t } = useTranslation();
   const gameRef = useRef<ReturnType<typeof createWatchGame> | null>(null);
@@ -47,8 +49,19 @@ export function WatchAI({ onBack }: { onBack: () => void }) {
       .finally(() => {
         if (!cancelled) setLoadingPolicy(false);
       });
+    async function refreshPolicies() {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const saved = await listPolicies();
+        if (!cancelled) setPolicies(saved);
+      } catch {
+        // Keep the current list during a temporary connection failure.
+      }
+    }
+    const refreshTimer = window.setInterval(refreshPolicies, POLICY_REFRESH_MS);
     return () => {
       cancelled = true;
+      window.clearInterval(refreshTimer);
       game.dispose();
       gameRef.current = null;
     };

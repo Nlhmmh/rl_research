@@ -16,12 +16,17 @@ it('isolates browser sessions and round-trips policy weights without overwriting
   const browserA = { cookie: '' };
   const browserB = { cookie: '' };
   let browser = browserA;
+  let remoteAddress = '192.0.2.10';
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     const req = Object.assign(Readable.from(init?.body ? [Buffer.from(String(init.body))] : []), {
       url,
       method: init?.method ?? 'GET',
-      headers: { ...Object.fromEntries(new Headers(init?.headers)), cookie: browser.cookie },
-      socket: {},
+      headers: {
+        ...Object.fromEntries(new Headers(init?.headers)),
+        host: 'localhost:5173',
+        cookie: browser.cookie,
+      },
+      socket: { remoteAddress },
     });
     let status = 500;
     let body = '';
@@ -64,6 +69,33 @@ it('isolates browser sessions and round-trips policy weights without overwriting
     expect(browserB.cookie).not.toBe(originalCookie);
     expect(await listRecords()).toEqual([]);
     expect(await get(key)).toBeNull();
+
+    const offlineId = 'offline-00000000-0000-0000-0000-000000000000/AI-1/best';
+    const offlineKey = `zawgyi/checkpoint/${offlineId}`;
+    const offline = { metadata: { id: offlineId, algorithm: 'dqn' } };
+    db.prepare('INSERT INTO policy_records VALUES (?, ?, ?)').run(
+      'offline-local',
+      offlineKey,
+      JSON.stringify(offline),
+    );
+    expect(await listRecords()).toEqual([]);
+    expect(await get(offlineKey)).toBeNull();
+
+    remoteAddress = '127.0.0.1';
+    expect(await listRecords()).toEqual([offline.metadata]);
+    expect(await get(offlineKey)).toEqual(offline);
+    expect(await get(key)).toBeNull();
+
+    browser = browserA;
+    expect(await listRecords()).toEqual(expect.arrayContaining([metadata, offline.metadata]));
+    await set(offlineKey, { ...offline, browserCopy: true });
+    expect(
+      (await listRecords()).filter(
+        (value) => value && typeof value === 'object' && 'id' in value && value.id === offlineId,
+      ),
+    ).toHaveLength(1);
+    browser = browserB;
+    expect(await get(offlineKey)).toEqual(offline);
   } finally {
     vi.unstubAllGlobals();
     db.close();
