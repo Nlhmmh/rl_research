@@ -8,15 +8,16 @@ interface Props {
   snapshots: AgentSnapshot[];
   cameraMode?: 'overview' | 'follow';
   selectedAgentId?: string;
+  victoryAudio?: boolean;
 }
 
-export function GameCanvas({ snapshots, cameraMode = 'follow', selectedAgentId }: Props) {
+export function GameCanvas({ snapshots, cameraMode = 'follow', selectedAgentId, victoryAudio = false }: Props) {
   const elementRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<LiveScene | null>(null);
 
   useEffect(() => {
     if (!elementRef.current) return;
-    const scene = new LiveScene();
+    const scene = new LiveScene(victoryAudio);
     sceneRef.current = scene;
 
     const game = new Phaser.Game({
@@ -42,12 +43,12 @@ export function GameCanvas({ snapshots, cameraMode = 'follow', selectedAgentId }
       game.destroy(true);
       sceneRef.current = null;
     };
-  }, []);
+  }, [victoryAudio]);
 
   useEffect(() => {
     sceneRef.current?.setSnapshots(snapshots);
     sceneRef.current?.setCameraMode(cameraMode, selectedAgentId);
-  }, [snapshots, cameraMode, selectedAgentId]);
+  }, [snapshots, cameraMode, selectedAgentId, victoryAudio]);
 
   return <div ref={elementRef} className="game-canvas" />;
 }

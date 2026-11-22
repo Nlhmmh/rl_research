@@ -75,6 +75,14 @@ export const Q_LEARNING = {
 } as const;
 export const OBSERVATION_VERSION = 'v2' as const;
 export const VIEW = { width: 960, height: 540, background: '#c4e3d2' } as const;
+export const VICTORY = {
+  frameWidth: 543,
+  frameHeight: 362,
+  frameRate: 6,
+  lastFrame: 7,
+  originX: 0.39,
+  originY: 0.93,
+} as const;
 export const HERO = {
   xEdges: [0, 444, 887, 1331, 1774],
   yEdges: [0, 444, 887],
@@ -110,9 +118,10 @@ export const PLATFORM = {
   surfaceY: 0.5,
 } as const;
 export const STONE = {
-  frameSize: 256,
-  lastFrame: 8,
+  frameEdges: [0, 249, 497, 743, 989, 1238, 1478, 1715, 1950, 2172],
+  frameTop: 210,
+  frameHeight: 272,
   frameRate: 8,
-  originY: 0.94,
-  size: 64,
+  originY: 0.98,
+  size: 36,
 } as const;

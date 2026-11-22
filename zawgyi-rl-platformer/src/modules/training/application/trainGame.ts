@@ -1,6 +1,9 @@
 import { LEVEL, OBSERVATION_VERSION } from '../../game/domain/level';
 import type { AgentSnapshot } from '../../game/domain/types';
-import { loadManifest, saveManifest } from '../../reinforcement-learning/infrastructure/persistence/checkpoints';
+import {
+  loadManifest,
+  saveManifest,
+} from '../../reinforcement-learning/infrastructure/persistence/checkpoints';
 import type {
   AgentStats,
   Algorithm,
@@ -73,8 +76,11 @@ export function createTrainGame(callbacks: TrainGameCallbacks) {
       const best = event.best.success
         ? `${event.best.steps} steps at episode ${event.best.episode}`
         : 'no successful policy yet';
+      const progress = event.result.success
+        ? `No improvement: ${Math.min(event.staleEvaluations, 5)}/5.`
+        : 'Continuing until the policy reaches the goal.';
       setMessage(
-        `${event.id}: evaluation at episode ${event.result.episode}: ${outcome}. Best: ${best}. No improvement: ${event.staleEvaluations}/5.`,
+        `${event.id}: evaluation at episode ${event.result.episode}: ${outcome}. Best: ${best}. ${progress}`,
       );
     }
     if (event.type === 'error') {

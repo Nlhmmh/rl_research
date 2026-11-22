@@ -4,7 +4,11 @@ import { HimavantaEnvironment } from '../../../game/domain/environment';
 import { observe } from '../../domain/policies/observation';
 import { qStateKey } from '../algorithms/q-learning/observation-q';
 import { EVALUATION } from '../../../game/domain/level';
-import { evaluatePolicy, isBetterEvaluation, type EvaluationResult } from '../../application/evaluation';
+import {
+  evaluatePolicy,
+  isBetterEvaluation,
+  type EvaluationResult,
+} from '../../application/evaluation';
 import type { CheckpointDetails } from '../persistence/checkpoints';
 import {
   dqnHandler,
@@ -58,7 +62,7 @@ async function train(id: string, selectedAlgorithm: Algorithm, episodes: number)
   try {
     const checkpointRoot = `run-${crypto.randomUUID()}/${id}`;
     let best: EvaluationResult | null = null;
-    let lastEvaluation: EvaluationResult | null = null;
+    let finalEvaluation: EvaluationResult | undefined;
     let staleEvaluations = 0;
     let completedEpisode = episodeNumber;
     let stopReason: 'episode-limit' | 'no-improvement' = 'episode-limit';
@@ -78,7 +82,6 @@ async function train(id: string, selectedAlgorithm: Algorithm, episodes: number)
         },
       );
       if (!result || !running) return;
-      lastEvaluation = result;
       if (isBetterEvaluation(result, best)) {
         await writePolicy(`${checkpointRoot}/best`, completedEpisode, {
           kind: 'best',
@@ -87,8 +90,9 @@ async function train(id: string, selectedAlgorithm: Algorithm, episodes: number)
         best = result;
         staleEvaluations = 0;
         send({ type: 'policy-saved', id, checkpointId: `${checkpointRoot}/best`, kind: 'best' });
-      } else staleEvaluations++;
+      } else if (best?.success) staleEvaluations++;
       send({ type: 'evaluation', id, result, best: best!, staleEvaluations });
+      return result;
     }
     const env = new HimavantaEnvironment();
     if (algorithm === 'q-learning') q ??= new QLearningAgent();
@@ -102,11 +106,7 @@ async function train(id: string, selectedAlgorithm: Algorithm, episodes: number)
     let failures = latestStats?.failures ?? 0;
     const recent: Array<{ reward: number; success: boolean }> = [];
     let lastSnapshotAt = 0;
-    for (
-      episodeNumber = (episodeNumber || 0) + 1;
-      episodeNumber <= episodes && running;
-      episodeNumber++
-    ) {
+    for (episodeNumber = (episodeNumber || 0) + 1; running; episodeNumber++) {
       let state = env.reset();
       let episodeReward = 0;
       const startSteps = totalSteps;
@@ -204,23 +204,22 @@ async function train(id: string, selectedAlgorithm: Algorithm, episodes: number)
         },
       });
       completedEpisode = episodeNumber;
-      if (completedEpisode % EVALUATION.everyEpisodes === 0) {
-        await evaluateCompletedPolicy();
-        if (staleEvaluations >= EVALUATION.patience) {
-          stopReason = 'no-improvement';
-          break;
-        }
+      if (completedEpisode % EVALUATION.everyEpisodes !== 0 && completedEpisode !== episodes)
+        continue;
+      const evaluation = await evaluateCompletedPolicy();
+      if (!evaluation?.success) continue;
+
+      if (completedEpisode >= episodes || staleEvaluations >= EVALUATION.patience) {
+        finalEvaluation = evaluation;
+        if (completedEpisode < episodes) stopReason = 'no-improvement';
+        break;
       }
     }
     if (running) {
-      // Short runs and a final partial evaluation interval still get both policies.
-      if ((lastEvaluation as EvaluationResult | null)?.episode !== completedEpisode)
-        await evaluateCompletedPolicy();
-      if (!running) return;
       episodeNumber = completedEpisode;
       await writePolicy(`${checkpointRoot}/final`, completedEpisode, {
         kind: 'final',
-        evaluation: lastEvaluation ?? undefined,
+        evaluation: finalEvaluation,
         stopReason,
       });
       send({ type: 'policy-saved', id, checkpointId: `${checkpointRoot}/final`, kind: 'final' });

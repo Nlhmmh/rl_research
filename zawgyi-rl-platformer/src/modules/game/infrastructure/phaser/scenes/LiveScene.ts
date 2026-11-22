@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { HERO, LEVEL, PLATFORM, STONE } from '../../../domain/level';
+import { HERO, LEVEL, PLATFORM, STONE, VICTORY } from '../../../domain/level';
 import { horizontalDirection, isJumpAction, type AgentSnapshot } from '../../../domain/types';
 
 const assetBase = `${import.meta.env.BASE_URL}assets/`;
@@ -7,25 +7,36 @@ const philosophersStoneUrl = `${assetBase}objects/philosopher-stone.png`;
 const himavantaForestUrl = `${assetBase}backgrounds/himavanta-forest.png`;
 const grassPlatformUrl = `${assetBase}terrain/grass-platform.png`;
 const zawgyiUrl = `${assetBase}characters/zawgyi/spritesheet.png`;
+const victoryTexture = 'zawgyi-victory';
+const victoryUrl = `${assetBase}characters/zawgyi/zawgyi_victory.png`;
+const stonePickupSound = 'stone-pickup';
 
 export class LiveScene extends Phaser.Scene {
   private agents = new Map<string, Phaser.GameObjects.Container>();
   private snapshots: AgentSnapshot[] = [];
   private followId: string | null = null;
   private overview = false;
+  private goalStone?: Phaser.GameObjects.Sprite;
 
-  constructor() {
+  private readonly victoryAudio: boolean;
+
+  constructor(victoryAudio = false) {
     super({ key: 'LiveScene' });
+    this.victoryAudio = victoryAudio;
   }
 
   preload(): void {
-    this.load.spritesheet('philosophers-stone', philosophersStoneUrl, {
-      frameWidth: STONE.frameSize,
-      frameHeight: STONE.frameSize,
-    });
+    if (this.victoryAudio) {
+      this.load.audio(stonePickupSound, `${assetBase}audio/effects/zawgyi_stone_pickup.mp3`);
+    }
+    this.load.image('philosophers-stone', philosophersStoneUrl);
     this.load.image('himavanta-forest', himavantaForestUrl);
     this.load.image('grass-platform', grassPlatformUrl);
     this.load.image('zawgyi-sheet', zawgyiUrl);
+    this.load.spritesheet(victoryTexture, victoryUrl, {
+      frameWidth: VICTORY.frameWidth,
+      frameHeight: VICTORY.frameHeight,
+    });
   }
 
   create(): void {
@@ -71,16 +82,33 @@ export class LiveScene extends Phaser.Scene {
         .setScale((segment.end - segment.start) / Math.round(source.width * PLATFORM.cropWidth));
     }
 
+    this.registerStoneFrames();
     this.anims.create({
       key: 'stone-glow',
-      frames: this.anims.generateFrameNumbers('philosophers-stone', { start: 0, end: STONE.lastFrame }),
+      frames: this.anims.generateFrameNumbers('philosophers-stone', {
+        start: 0,
+        end: STONE.frameEdges.length - 2,
+      }),
       frameRate: STONE.frameRate,
       repeat: -1,
     });
-    this.add.sprite(LEVEL.goalX, LEVEL.groundY, 'philosophers-stone')
+    this.goalStone = this.add.sprite(LEVEL.goalX, LEVEL.groundY, 'philosophers-stone', 0)
       .setOrigin(0.5, STONE.originY)
-      .setDisplaySize(STONE.size, STONE.size)
+      .setScale(STONE.size / STONE.frameHeight)
       .play('stone-glow');
+    this.anims.create({
+      key: victoryTexture,
+      frames: this.anims.generateFrameNumbers(victoryTexture, { start: 0, end: VICTORY.lastFrame }),
+      frameRate: VICTORY.frameRate,
+    });
+  }
+
+  private registerStoneFrames(): void {
+    const texture = this.textures.get('philosophers-stone');
+    for (let frame = 0; frame < STONE.frameEdges.length - 1; frame++) {
+      const x = STONE.frameEdges[frame];
+      texture.add(frame, 0, x, STONE.frameTop, STONE.frameEdges[frame + 1] - x, STONE.frameHeight);
+    }
   }
 
   setSnapshots(snapshots: AgentSnapshot[]): void {
@@ -93,6 +121,10 @@ export class LiveScene extends Phaser.Scene {
   }
 
   update(): void {
+    // The victory art contains the stone. Keep the world goal visible for other agents.
+    this.goalStone?.setVisible(
+      this.snapshots.length !== 1 || this.snapshots[0].status !== 'success',
+    );
     const alive = new Set(this.snapshots.map((s) => s.id)); // Track which agents are still alive.
     for (const [id, sprite] of this.agents) {
       if (!alive.has(id)) {
@@ -125,6 +157,27 @@ export class LiveScene extends Phaser.Scene {
         this.agents.set(snapshot.id, visual);
       }
       const hero = visual.getByName('hero') as Phaser.GameObjects.Sprite;
+      visual.setPosition(snapshot.x, snapshot.y);
+      visual.setAlpha(snapshot.status === 'failed' ? HERO.failedAlpha : 1);
+      if (snapshot.status === 'success') {
+        if (hero.texture.key !== victoryTexture) {
+          hero.setTexture(victoryTexture, 0)
+            .setOrigin(VICTORY.originX, VICTORY.originY)
+            .setScale(HERO.height / VICTORY.frameHeight)
+            .setFlipX(false)
+            .play(victoryTexture);
+          if (this.victoryAudio && this.cache.audio.exists(stonePickupSound)) {
+            this.sound.play(stonePickupSound);
+          }
+        }
+        return;
+      }
+      if (hero.texture.key === victoryTexture) {
+        hero.anims.stop();
+        hero.setTexture('zawgyi-sheet', 'pose-0')
+          .setOrigin(0.5, 1)
+          .setScale(HERO.height / HERO.referenceHeight);
+      }
       const direction = horizontalDirection(snapshot.action);
       const jumping = isJumpAction(snapshot.action);
       const moving = direction !== 0;
@@ -136,8 +189,6 @@ export class LiveScene extends Phaser.Scene {
           : Math.floor(this.time.now / HERO.idleMs) % HERO.idleCount;
       if (snapshot.status === 'running') hero.setFrame(`pose-${frame}`);
       hero.setFlipX(direction < 0);
-      visual.setPosition(snapshot.x, snapshot.y);
-      visual.setAlpha(snapshot.status === 'failed' ? HERO.failedAlpha : 1);
     });
 
     const camera = this.cameras.main;
@@ -150,4 +201,5 @@ export class LiveScene extends Phaser.Scene {
       if (selected) camera.centerOn(selected.x, LEVEL.height / 2);
     }
   }
+
 }

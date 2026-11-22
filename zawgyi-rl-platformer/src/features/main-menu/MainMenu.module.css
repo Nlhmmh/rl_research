@@ -1,6 +1,10 @@
 .screen {
-  min-height: 100vh;
-  padding: 7vh 1.5rem 3rem;
+  min-height: 100dvh;
+  padding: 4rem 1rem 2rem;
+  background:
+    radial-gradient(ellipse at center, #eef1d66b 0%, transparent 65%),
+    #243d2d url('/assets/backgrounds/menu-background-1920x1080.png') center / cover no-repeat;
+  color: #152d22;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -8,8 +12,20 @@
   justify-content: center;
 }
 .screen h1 {
-  margin-top: 2rem;
-  margin-bottom: 2rem;
+  margin: 0.8rem 0 0.4rem;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(2rem, 4.5vw, 12rem);
+  line-height: 1.25;
+  text-wrap: balance;
+  text-shadow: 0px 4px 8px #fff6d9;
+}
+.screen:lang(my) h1 {
+  font-family: 'Noto Serif Myanmar', 'Myanmar MN', 'Noto Sans Myanmar', serif;
+  font-size: clamp(1.75rem, 4vw, 5rem);
+  line-height: 1.45;
+}
+.screen:lang(my) {
+  font-family: 'Noto Sans Myanmar', 'Myanmar Sangam MN', 'Padauk', system-ui, sans-serif;
 }
 .brandMark {
   width: 96px;
@@ -18,17 +34,13 @@
   border-radius: 50%;
 }
 .subtitle {
-  color: #5e7667;
-  font-size: 1.2rem;
-  margin-bottom: 2rem;
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  font-weight: 650;
+  text-shadow: 0 1px 6px #fff6d9;
+  margin-bottom: 1.5rem;
 }
 .actions {
   display: grid;
-  width: min(420px, 100%);
+  width: min(500px, 100%);
   gap: 0.75rem;
-  margin-bottom: 2rem;
-}
-.actions button {
-  padding: 1rem;
-  font-size: 1.05rem;
 }

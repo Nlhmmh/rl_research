@@ -72,7 +72,7 @@ export function HumanPlay({ onBack }: { onBack: () => void }) {
             </p>
           )}
         </div>
-        <GameCanvas snapshots={snapshots} cameraMode="follow" />
+        <GameCanvas snapshots={snapshots} cameraMode="follow" victoryAudio />
       </section>
     </main>
   );

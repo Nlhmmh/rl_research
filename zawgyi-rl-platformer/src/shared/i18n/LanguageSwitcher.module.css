@@ -2,4 +2,110 @@
   position: absolute;
   top: 1rem;
   right: 1rem;
+  z-index: 2;
+}
+
+.control {
+  position: relative;
+  display: block;
+}
+
+.control::before,
+.control::after {
+  position: absolute;
+  top: 50%;
+  pointer-events: none;
+  content: '';
+}
+
+.control::before {
+  left: 0.85rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border: 1px solid #ffda86;
+  background: #bb541f;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.control::after {
+  right: 0.95rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-right: 2px solid #ffda86;
+  border-bottom: 2px solid #ffda86;
+  transform: translateY(-70%) rotate(45deg);
+}
+
+.control {
+  min-height: 44px;
+  min-width: 8rem;
+  margin: 0;
+  padding: 0.45rem 2rem 0.45rem 1.85rem;
+  border: 1px solid #d7a453;
+  border-radius: 0.55rem;
+  background: linear-gradient(#304c37, #172c21);
+  color: #fff1c9;
+  box-shadow: inset 0 0 0 2px #23190c55, 0 2px 6px #142b2240;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.control:hover,
+.control[aria-expanded='true'] {
+  border-color: #ffdb8c;
+  background: linear-gradient(#3d5b42, #203b2c);
+}
+
+.control:focus-visible,
+.option:focus-visible {
+  outline: 2px solid #805016;
+  outline-offset: 3px;
+}
+
+.popup {
+  position: absolute;
+  inset-inline-end: 0;
+  top: calc(100% + 0.45rem);
+  min-width: 100%;
+  padding: 0.3rem;
+  list-style: none;
+  border: 1px solid #d7a453;
+  border-radius: 0.6rem;
+  background: #172c21;
+  box-shadow: 0 5px 12px #142b2266;
+}
+
+.option {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.4rem 0.65rem 0.4rem 1.85rem;
+  position: relative;
+  border: 0;
+  border-radius: 0.3rem;
+  text-align: start;
+  white-space: nowrap;
+  background: transparent;
+  color: #fff1c9;
+  cursor: pointer;
+}
+
+.option[aria-pressed='true'] {
+  background: #eed399;
+  color: #243329;
+  font-weight: 650;
+}
+
+.option[aria-pressed='true']::before {
+  content: '✓';
+  position: absolute;
+  inset-inline-start: 0.65rem;
+}
+
+.option:hover {
+  background: #3d5b42;
+}
+
+.option[aria-pressed='true']:hover {
+  background: #ffe4ac;
 }

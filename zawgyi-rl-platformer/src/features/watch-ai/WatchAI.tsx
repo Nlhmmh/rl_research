@@ -152,7 +152,7 @@ export function WatchAI({ onBack }: { onBack: () => void }) {
           <span>Reward: {snapshot.reward.toFixed(1)}</span>
           <span>Status: {snapshot.status}</span>
         </div>
-        <GameCanvas snapshots={[snapshot]} cameraMode="follow" selectedAgentId="WATCH-AI" />
+        <GameCanvas snapshots={[snapshot]} cameraMode="follow" selectedAgentId="WATCH-AI" victoryAudio />
         {(snapshot.status === 'success' || snapshot.status === 'failed') && (
           <div
             className={`${styles.outcome} ${snapshot.status === 'success' ? styles.success : styles.failure}`}

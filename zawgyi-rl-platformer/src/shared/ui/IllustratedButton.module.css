@@ -1,0 +1,74 @@
+.button {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  width: 100%;
+  aspect-ratio: 816 / var(--visible-art-height);
+  padding: 0 2.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--button-art) center bottom / 100% auto no-repeat;
+  font-size: clamp(1rem, 2vw, 1.2rem);
+  font-weight: 700;
+  line-height: 1.3;
+  cursor: pointer;
+  transition:
+    transform 150ms ease,
+    filter 150ms ease,
+    color 150ms ease;
+}
+
+.button:lang(my) .label {
+  line-height: 1.55;
+  transform: translateY(0.13em);
+}
+
+.button:enabled:hover {
+  color: var(--hover-text);
+  filter: brightness(1.12) saturate(1.1) drop-shadow(0 5px 4px #152d2255);
+  transform: translateY(-3px) scale(1.04);
+}
+
+.button:enabled:active {
+  color: var(--pressed-text);
+  filter: brightness(0.9) saturate(1.05);
+  transform: translateY(2px) scale(0.985);
+}
+
+.button:focus-visible {
+  outline: 3px solid #152d22;
+  outline-offset: 3px;
+}
+
+.primary {
+  --button-art: url('/assets/ui/buttons/button-primary-normal.png');
+  --visible-art-height: 121;
+  --hover-text: #fff;
+  --pressed-text: #ffe5a8;
+  color: #fff7dc;
+  text-shadow: 0 1px 3px #430b14;
+}
+
+.secondary {
+  --button-art: url('/assets/ui/buttons/button-secondary-normal.png');
+  --visible-art-height: 110;
+  --hover-text: #69400f;
+  --pressed-text: #2d1905;
+  color: #38230e;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+
+  .button:enabled:hover,
+  .button:enabled:active {
+    transform: none;
+  }
+}
