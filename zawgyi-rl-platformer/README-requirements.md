@@ -115,7 +115,9 @@ Users can watch an AI agent play the game automatically.
 - Adjust gameplay speed (1×, 2×, 4×).
 - Watch an untrained AI agent.
 - Watch a trained AI agent.
-- Select a specific saved run and agent, with algorithm, episode count, and save time shown.
+- Select a specific saved run and agent, with algorithm, episode count, and
+  save time shown. On localhost, list Python-trained checkpoints in the same
+  dropdown and refresh the list while Watch AI is visible.
 - Open a successful Best checkpoint when available and provide a shortcut to
   reload the recommended policy.
 - Mark incompatible checkpoints and prevent selecting them for playback.
@@ -149,6 +151,12 @@ Users can train an AI agent to play the platformer.
 - Select 1, 2, 4, or 8 independent agents.
 - Switch between rendered and headless training during a run.
 - Keep statistics and charts active when rendering is disabled.
+
+#### 6.4 Offline DQN training
+
+- Train one DQN agent from the terminal with a configurable step budget and seed.
+- Reuse the game's TypeScript simulator, rewards, and observations.
+- Save checkpoints directly to the app's SQLite database for Watch AI.
 
 ### 7. Reinforcement Learning Requirements
 
@@ -611,14 +619,15 @@ The main focus is not creating a complex platformer. It is creating an engaging 
   improvement once Best exists. Report budget exhaustion when no evaluation
   reached the goal.
 - Save Final on automatic completion, even if the last evaluation failed.
-  Keep Final and Best under the same run ID. Publish the latest-run manifest
-  only after all agents save their checkpoints.
-- Store policies and compatibility metadata in server-side SQLite. Scope access
-  to the browser session identified by a cookie.
+  Keep Final and Best under the same run ID. For browser training, publish
+  the latest-run manifest after all agents save their checkpoints.
+- Store policies and compatibility metadata in SQLite. Scope browser-trained
+  policies to the browser session. Serve offline-trained policies to local
+  Watch AI sessions through loopback.
 - Pause on manual Save and wait for any in-flight DQN update before serialization.
 - Watch AI lists saved policies across runs and disables incompatible entries.
-  Train AI loads the latest
-  saved run as a starting point with fresh DQN replay and optimizer state.
+  Train AI loads the latest browser-saved run as a starting point with fresh
+  DQN replay and optimizer state.
 - Validate the level, observation, and reward versions before loading. Current
   observation and reward versions are `v2`.
 

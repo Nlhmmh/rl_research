@@ -27,6 +27,12 @@ npm run dev
 The interface supports English and Burmese Unicode. The game uses supplied
 character, forest, platform, stone, and emblem PNG assets.
 
+### Offline DQN training
+
+Train one DQN agent from the terminal with Python and NumPy. The trainer saves
+Final and any successful Best directly to SQLite. Both appear in the Watch AI
+dropdown on localhost. [Offline setup and command](zawgyi-rl-platformer/README.md#offline-dqn-training)
+
 ### Documentation
 
 - [Application setup, controls, architecture, and storage](zawgyi-rl-platformer/README.md)
@@ -44,7 +50,3 @@ npm run lint
 npm run typecheck
 npm run build
 ```
-
-Training saves Final and, once an agent reaches the goal in a greedy evaluation,
-Best. The app serves these policies from SQLite using a browser session cookie.
-See the [application README](zawgyi-rl-platformer/README.md#saved-policies) for storage details.

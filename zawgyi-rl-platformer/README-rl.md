@@ -184,6 +184,11 @@ disable exploration.
 
 ## 5. One training step
 
+The sequence below shows browser training. The offline trainer uses one Python
+DQN agent. The Node bridge runs the same TypeScript simulator, including
+observations and rewards. NumPy handles action selection, replay, and network
+updates. [Offline training command](README.md#offline-dqn-training)
+
 ```mermaid
 sequenceDiagram
     participant W as Agent worker
@@ -253,18 +258,24 @@ algorithms, train with independent seeds under the same step budget. In a
 100,000-step pilot, none of the three Q-learning runs or three DQN runs reached
 the goal in evaluation. The app's default budget is provisional.
 
+In one offline run with seed 11, the first greedy success came after 500,860
+training steps. Best finished in 476 steps, and Final missed the goal.
+
 ## 7. Checkpoints and code map
 
 SQLite stores `<runId>/<agentId>/best` after the first successful evaluation and
 `<runId>/<agentId>/final` after automatic completion. The latest-run manifest
-references these records. Watch AI prefers a successful Best and allows manual
-selection of Final or another compatible policy. Loading stored DQN weights
-starts with fresh replay and optimizer state.
+tracks browser runs. The Python trainer writes its checkpoints directly to the
+same database. On localhost, Watch AI lists both sources in one dropdown and
+prefers a successful Best. Stored DQN checkpoints preserve model weights and
+evaluation metadata. Replay and optimizer state start fresh when training is
+restarted from saved weights.
 
 | Source | Responsibility |
 | --- | --- |
 | [Game domain](src/modules/game/domain/) | Level, physics, reward and episode termination |
 | [RL domain and application](src/modules/reinforcement-learning/) | Observations and evaluation |
 | [Algorithms](src/modules/reinforcement-learning/infrastructure/algorithms/) | Q-learning, DQN and replay |
-| [Trainer worker](src/modules/reinforcement-learning/infrastructure/workers/trainer.worker.ts) | Learning, evaluation schedule, stopping and checkpoints |
+| [Trainer worker](src/modules/reinforcement-learning/infrastructure/workers/trainer.worker.ts) | Browser training, evaluation and checkpoint saves |
+| [Offline DQN trainer](tools/offline-dqn/) | Python DQN, TypeScript simulator bridge, and direct SQLite saves |
 | [Policy persistence](src/modules/reinforcement-learning/infrastructure/persistence/checkpoints.ts) | Saved policies, compatibility and run manifest |

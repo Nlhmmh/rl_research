@@ -34,9 +34,9 @@ Keyboard mappings are defined in `src/features/human-play/keyboard-controller.ts
 
 Watch AI opens a successful **Best** policy when available. It prefers the
 fastest successful Best in the latest saved run, then looks for a successful
-checkpoint across saved runs. You can also select a specific saved policy
-or use the random baseline. The picker shows evaluation outcomes when available
-and disables incompatible policies.
+checkpoint across saved runs. Use the dropdown to select a saved policy,
+including Python-trained policies on localhost, or choose the random baseline.
+The picker shows available evaluation outcomes and disables incompatible policies.
 
 Playback supports 1×/2×/4×, pause/resume, and restart. Learned policies use
 exploration off and receive no learning updates. The episode stops on completion;
@@ -74,6 +74,27 @@ entered number of steps for those agents and continues their in-memory training.
 weights from the latest saved run. Use Save to keep the current policy before
 stopping or leaving an active run.
 
+## Offline DQN training
+
+From `zawgyi-rl-platformer`, install the app dependencies with `npm install` and
+run the commands below. The trainer uses Python 3 with NumPy and Node with native
+TypeScript support and `module.registerHooks`. It was tested with Node 26.4.
+
+```bash
+python3 -m pip install -r tools/offline-dqn/requirements.txt
+python3 tools/offline-dqn/train.py --steps 1000000 --seed 11
+```
+
+The Python trainer runs one DQN agent and uses the game's TypeScript simulator.
+It writes **Best** on each faster successful evaluation and **Final** when
+training ends. The terminal prints evaluations, throughput, and the checkpoint
+IDs. Use a different `--seed` for an independent run.
+
+Open the game on **localhost**. In **Watch AI**, select the checkpoint from the
+dropdown and click **Load selected policy**. The list refreshes about every five
+seconds while the screen is visible. The trainer uses `.data/policies.sqlite`
+by default. Use `--database PATH` for a separate experiment database.
+
 ## Learning configuration
 
 `src/modules/game/domain/level.ts` centralizes geometry, physics constants, rewards, observation settings,
@@ -89,8 +110,8 @@ crossings, and goal completion. Actual jump takeoffs incur a small penalty.
 Walking bonuses cannot be repeatedly collected over the same ground.
 
 DQN uses an 8-feature observation, two 64-unit hidden layers, six action outputs,
-experience replay, and a target network. CPU workers perform training off the
-React thread.
+experience replay, and a target network. In the browser, CPU workers train off
+the React thread. The offline trainer uses NumPy for the same DQN architecture.
 
 A seeded regression benchmark compares both state encodings using 5,000 training
 episodes per seed and exploration-free evaluation on the fixed level. Such tests
@@ -101,6 +122,8 @@ will succeed.
 
 ```text
 public/assets/                       Game art and branding
+server/                              SQLite policy API
+tools/offline-dqn/                    Python DQN trainer and simulator bridge
 src/
   main.tsx                           React entry point
   app/                               App shell, navigation, global styles
@@ -125,27 +148,28 @@ changes through callbacks and are disposed when their screens unmount.
 
 ## Saved policies
 
-The Vite dev and preview servers store policies in **`.data/policies.sqlite`**
-under the application directory. A browser session cookie identifies which
-records to load. Clearing the cookie loses access to those records from that
-session. The SQLite rows remain on the server.
+The Vite dev and preview servers and the Python trainer use
+**`.data/policies.sqlite`** under the application directory. A session cookie
+identifies browser-trained policies. Offline policies are shared across local
+Watch AI sessions and are served only over loopback. Clearing a session cookie
+loses access to its browser-trained records. The rows remain in SQLite.
 
 | Record key | Contents |
 | --- | --- |
 | `zawgyi/checkpoint/<runId>/<agentId>/best` | Fastest successful greedy policy |
 | `zawgyi/checkpoint/<runId>/<agentId>/final` | Policy and evaluation when training ends automatically |
 | `zawgyi/checkpoint/<runId>/<agentId>/manual` | Policy saved with the Save button |
-| `zawgyi/latest-manifest` | Latest saved run and references to its agent checkpoints |
+| `zawgyi/latest-manifest` | Latest browser-saved run and references to its agent checkpoints |
 
-One run ID groups all agents. The completion manifest references the worker
-checkpoints after all agents save successfully. Q-learning saves its Q-table.
-DQN stores the model and metadata together. Older compatible policies remain
+One run ID groups all agents. For browser training, the completion manifest
+references the worker checkpoints after all agents save successfully. Q-learning
+saves its Q-table. DQN stores the model and metadata together. Older compatible policies remain
 selectable in Watch AI. Current observation and reward versions are both `v2`.
 
-Extending an open run preserves its in-memory training state. Loading a policy
-from SQLite starts a new run from the saved weights. DQN replay and optimizer
-state start fresh. On startup, the app imports legacy IndexedDB policies into
-SQLite once per browser session.
+Extending an open browser run preserves its in-memory training state. In
+Train AI, loading the latest browser run starts a new run from saved weights
+with fresh DQN replay and optimizer state. On startup, the app imports legacy
+IndexedDB policies into SQLite once per browser session.
 
 ## Assets and localization
 
