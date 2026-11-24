@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { HERO, LEVEL, PLATFORM, STONE, VICTORY } from '../../../domain/level';
+import { DEFEAT, HERO, LEVEL, PLATFORM, STONE, VICTORY } from '../../../domain/level';
 import { horizontalDirection, isJumpAction, type AgentSnapshot } from '../../../domain/types';
 
 const assetBase = `${import.meta.env.BASE_URL}assets/`;
@@ -9,6 +9,8 @@ const grassPlatformUrl = `${assetBase}terrain/grass-platform.png`;
 const zawgyiUrl = `${assetBase}characters/zawgyi/spritesheet.png`;
 const victoryTexture = 'zawgyi-victory';
 const victoryUrl = `${assetBase}characters/zawgyi/zawgyi_victory.png`;
+const defeatTexture = 'zawgyi-defeat';
+const defeatUrl = `${assetBase}characters/zawgyi/defeat_nimation.png`;
 const stonePickupSound = 'stone-pickup';
 
 export class LiveScene extends Phaser.Scene {
@@ -36,6 +38,10 @@ export class LiveScene extends Phaser.Scene {
     this.load.spritesheet(victoryTexture, victoryUrl, {
       frameWidth: VICTORY.frameWidth,
       frameHeight: VICTORY.frameHeight,
+    });
+    this.load.spritesheet(defeatTexture, defeatUrl, {
+      frameWidth: DEFEAT.frameWidth,
+      frameHeight: DEFEAT.frameHeight,
     });
   }
 
@@ -101,6 +107,27 @@ export class LiveScene extends Phaser.Scene {
       frames: this.anims.generateFrameNumbers(victoryTexture, { start: 0, end: VICTORY.lastFrame }),
       frameRate: VICTORY.frameRate,
     });
+    this.registerDefeatAnimation();
+  }
+
+  private registerDefeatAnimation(): void {
+    const texture = this.textures.get(defeatTexture);
+    // Align the two rows of poses to the same ground plane as Zawgyi collapses.
+    DEFEAT.footY.forEach((footY, index) => {
+      const frame = texture.get(index);
+      frame.customPivot = true;
+      frame.pivotX = 0.5;
+      frame.pivotY = footY / DEFEAT.frameHeight;
+    });
+    this.anims.create({
+      key: defeatTexture,
+      frames: this.anims.generateFrameNumbers(defeatTexture, {
+        start: 0,
+        end: DEFEAT.footY.length - 1,
+      }),
+      frameRate: DEFEAT.frameRate,
+      repeat: 0,
+    });
   }
 
   private registerStoneFrames(): void {
@@ -121,6 +148,12 @@ export class LiveScene extends Phaser.Scene {
   }
 
   update(): void {
+    const camera = this.cameras.main;
+    const widthZoom = camera.width / LEVEL.width;
+    const heightZoom = camera.height / LEVEL.height;
+    const zoom = this.overview ? Math.min(widthZoom, heightZoom) : Math.max(widthZoom, heightZoom);
+    const visibleBottom = Math.min(LEVEL.height, LEVEL.height / 2 + camera.height / (2 * zoom));
+
     // The victory art contains the stone. Keep the world goal visible for other agents.
     this.goalStone?.setVisible(
       this.snapshots.length !== 1 || this.snapshots[0].status !== 'success',
@@ -158,7 +191,17 @@ export class LiveScene extends Phaser.Scene {
       }
       const hero = visual.getByName('hero') as Phaser.GameObjects.Sprite;
       visual.setPosition(snapshot.x, snapshot.y);
-      visual.setAlpha(snapshot.status === 'failed' ? HERO.failedAlpha : 1);
+      if (snapshot.status === 'failed') {
+        // The simulator ends a fall below the level. Keep the collapse visible in the pit.
+        visual.y = Math.min(snapshot.y, visibleBottom - DEFEAT.bottomInset);
+        if (hero.texture.key !== defeatTexture) {
+          hero.setTexture(defeatTexture, 0)
+            .setScale(HERO.height / DEFEAT.frameHeight)
+            .setFlipX(horizontalDirection(snapshot.action) < 0)
+            .play(defeatTexture);
+        }
+        return;
+      }
       if (snapshot.status === 'success') {
         if (hero.texture.key !== victoryTexture) {
           hero.setTexture(victoryTexture, 0)
@@ -172,7 +215,7 @@ export class LiveScene extends Phaser.Scene {
         }
         return;
       }
-      if (hero.texture.key === victoryTexture) {
+      if (hero.texture.key !== 'zawgyi-sheet') {
         hero.anims.stop();
         hero.setTexture('zawgyi-sheet', 'pose-0')
           .setOrigin(0.5, 1)
@@ -191,12 +234,10 @@ export class LiveScene extends Phaser.Scene {
       hero.setFlipX(direction < 0);
     });
 
-    const camera = this.cameras.main;
+    camera.setZoom(zoom);
     if (this.overview) {
-      camera.setZoom(Math.min(camera.width / LEVEL.width, camera.height / LEVEL.height));
       camera.centerOn(LEVEL.width / 2, LEVEL.height / 2);
     } else {
-      camera.setZoom(Math.max(camera.height / LEVEL.height, camera.width / LEVEL.width));
       const selected = this.snapshots.find((s) => s.id === this.followId) ?? this.snapshots[0];
       if (selected) camera.centerOn(selected.x, LEVEL.height / 2);
     }

@@ -84,6 +84,13 @@ export const VICTORY = {
   originX: 0.39,
   originY: 0.93,
 } as const;
+export const DEFEAT = {
+  frameWidth: 384,
+  frameHeight: 512,
+  frameRate: 8,
+  footY: [476, 477, 478, 478, 450, 441, 439, 440],
+  bottomInset: 12,
+} as const;
 export const HERO = {
   xEdges: [0, 444, 887, 1331, 1774],
   yEdges: [0, 444, 887],
@@ -108,7 +115,6 @@ export const HERO = {
   jumpMs: 180,
   idleCount: 2,
   idleMs: 500,
-  failedAlpha: 0.5,
   colors: [0xb81f32, 0x2563eb, 0x16a34a, 0xb45309, 0x9333ea, 0x0891b2, 0xbe185d, 0x65a30d],
 } as const;
 export const PLATFORM = {
